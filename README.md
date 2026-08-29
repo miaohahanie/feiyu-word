@@ -35,6 +35,20 @@ npm start
 > 需要 Node.js 18+。首次安装会下载 Electron；项目内置 `.npmrc` 与 `scripts/ensure-electron.js`，使用 npmmirror 镜像自动补齐二进制。
 > 可用 `npm test` 运行自动化冒烟测试（查词 + 复习流程）。
 
+## 打包为 exe
+
+```bash
+npm install
+npm run dist
+```
+
+产物在 `dist/` 目录：
+
+- `单词桌宠-0.2.0-Setup.exe` —— 安装版（NSIS，可选择安装目录）
+- `单词桌宠-0.2.0-Portable.exe` —— 绿色便携版，双击即用
+
+> 已配置 electron-builder（NSIS + Portable），应用图标为 `assets/icon.ico`；`dist/` 已在 `.gitignore` 中忽略，不会提交到 git。
+
 ## 使用提示
 
 | 操作 | 方式 |
