@@ -1,0 +1,65 @@
+{
+  "name": "word-pet",
+  "version": "0.2.0",
+  "description": "六级词汇记忆桌宠：阅读驱动查词 + FSRS 自适应复习",
+  "main": "main.js",
+  "scripts": {
+    "start": "node scripts/ensure-electron.js && electron .",
+    "postinstall": "node scripts/ensure-electron.js",
+    "dev": "electron . --dev",
+    "test": "electron . --smoke-test",
+    "dist": "node scripts/ensure-electron.js && electron-builder --win",
+    "build:cet6": "node scripts/build-cet6.js",
+    "make:tray": "node scripts/make-tray-icon.js",
+    "make:appicon": "node scripts/make-icon.js",
+    "make:icons": "node scripts/make-tray-icon.js && node scripts/make-icon.js"
+  },
+  "devDependencies": {
+    "electron": "^44.0.0",
+    "electron-builder": "^26.15.3"
+  },
+  "build": {
+    "appId": "com.wordpet.app",
+    "productName": "单词桌宠",
+    "copyright": "Copyright © 2026 word-pet",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "renderer/**/*",
+      "assets/**/*",
+      "素材/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        },
+        {
+          "target": "portable",
+          "arch": ["x64"]
+        }
+      ],
+      "icon": "assets/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "单词桌宠",
+      "artifactName": "${productName}-${version}-Setup.${ext}"
+    },
+    "portable": {
+      "artifactName": "${productName}-${version}-Portable.${ext}"
+    },
+    "electronDownload": {
+      "mirror": "https://npmmirror.com/mirrors/electron/"
+    }
+  }
+}

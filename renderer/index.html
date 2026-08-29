@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' file: data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' https:" />
+  <title>单词桌宠</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div id="app">
+    <!-- 桌宠区（可拖动） -->
+    <div id="pet-bar" class="pet-bar">
+      <img id="pet-img" class="pet-img" src="../素材/工作ing.gif" alt="桌宠" draggable="false" />
+      <div id="pet-bubble" class="pet-bubble hidden"></div>
+      <div class="pet-actions">
+        <button id="btn-minimize" class="mini-btn" title="收起">−</button>
+        <button id="btn-close" class="mini-btn" title="隐藏">×</button>
+      </div>
+    </div>
+
+    <!-- 功能面板 -->
+    <div id="panel" class="panel hidden">
+      <nav class="tabs">
+        <button class="tab active" data-tab="query">查词</button>
+        <button class="tab" data-tab="review">复习</button>
+        <button class="tab" data-tab="words">单词本</button>
+        <button class="tab" data-tab="stats">统计</button>
+        <button class="tab" data-tab="settings">设置</button>
+      </nav>
+
+      <main class="content">
+        <!-- 查词 -->
+        <section id="tab-query" class="tab-page active">
+          <div class="card">
+            <h2>🔍 查词</h2>
+            <div class="input-row">
+              <input id="query-input" class="neo-input" type="text" placeholder="输入英文单词，回车查询" autocomplete="off" />
+              <button id="query-btn" class="neo-btn primary">查</button>
+            </div>
+            <label class="check-row">
+              <input id="query-use-clipboard" type="checkbox" checked />
+              自动读取剪贴板匹配原文例句
+            </label>
+            <div id="query-result" class="query-result"></div>
+          </div>
+        </section>
+
+        <!-- 复习 -->
+        <section id="tab-review" class="tab-page">
+          <div class="card">
+            <h2>🧠 复习</h2>
+            <div id="review-empty" class="empty-box">
+              <p>暂无待复习的单词</p>
+              <p class="muted">先去查词收录一些生词吧～</p>
+            </div>
+            <div id="review-card" class="hidden">
+              <div class="review-word-box">
+                <div id="review-word" class="review-word"></div>
+                <div id="review-example" class="review-example hidden"></div>
+              </div>
+              <input id="review-answer" class="neo-input" type="text" placeholder="键入中文意思，回车提交" autocomplete="off" />
+              <div class="btn-row">
+                <button id="review-submit" class="neo-btn primary">提交</button>
+                <button id="review-skip" class="neo-btn">跳过</button>
+                <button id="review-known" class="neo-btn">已会</button>
+              </div>
+              <div id="review-feedback" class="review-feedback hidden">
+                <div class="feedback-block">
+                  <strong>正确释义：</strong>
+                  <span id="feedback-meaning"></span>
+                </div>
+                <div id="feedback-example" class="feedback-block hidden">
+                  <strong>原文：</strong><span id="feedback-example-text"></span>
+                  <div id="feedback-example-trans" class="muted"></div>
+                </div>
+                <div class="rating-row">
+                  <span class="label">掌握度（0 = 完全不会，10 = 完全掌握）</span>
+                  <div id="rating-buttons" class="rating-buttons"></div>
+                </div>
+              </div>
+              <div id="review-done" class="empty-box hidden">
+                <p>🎉 今日复习完成！</p>
+                <p id="review-done-info" class="muted"></p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 单词本 -->
+        <section id="tab-words" class="tab-page">
+          <div class="card">
+            <div class="book-bar">
+              <select id="book-select" class="neo-input book-select"></select>
+              <button id="btn-new-book" class="neo-btn">新建</button>
+            </div>
+            <div class="muted" id="active-book-info"></div>
+            <div class="card-head">
+              <h2>📚 单词本</h2>
+              <div class="btn-row">
+                <button id="btn-import" class="neo-btn">导入</button>
+                <button id="btn-export" class="neo-btn">导出</button>
+              </div>
+            </div>
+            <input id="words-search" class="neo-input" type="text" placeholder="搜索单词 / 释义" />
+            <div id="words-list" class="words-list"></div>
+          </div>
+        </section>
+
+        <!-- 统计 -->
+        <section id="tab-stats" class="tab-page">
+          <div class="card">
+            <h2>📊 统计</h2>
+            <div id="stats-grid" class="stats-grid"></div>
+            <div id="stats-detail" class="stats-detail"></div>
+          </div>
+        </section>
+
+        <!-- 设置 -->
+        <section id="tab-settings" class="tab-page">
+          <div class="card">
+            <h2>⚙️ 设置</h2>
+            <div class="setting-row">
+              <span>呼出输入栏快捷键</span>
+              <span class="kbd">Alt + W</span>
+            </div>
+            <div class="setting-row">
+              <span>隐藏输入栏快捷键</span>
+              <span class="kbd">Alt + E</span>
+            </div>
+            <div class="setting-row">
+              <span>显示/隐藏桌宠快捷键</span>
+              <span class="kbd">Alt + P</span>
+            </div>
+            <div class="setting-row">
+              <label class="check-row">
+                <input id="setting-auto-launch" type="checkbox" />
+                开机自启动
+              </label>
+            </div>
+            <div class="setting-row">
+              <span>每日复习配额</span>
+              <input id="setting-quota" class="neo-input small" type="number" min="1" max="200" />
+            </div>
+            <div class="setting-row">
+              <label class="check-row">
+                <input id="setting-show-example" type="checkbox" />
+                复习时先展示原文例句（有则显示）
+              </label>
+            </div>
+            <div class="setting-row">
+              <span>离线词库词数</span>
+              <span id="setting-dict-count" class="kbd"></span>
+            </div>
+            <div class="btn-row">
+              <button id="btn-reset" class="neo-btn danger">清空当前词汇本</button>
+              <button id="btn-seed" class="neo-btn">导入示例词</button>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <!-- 新建词汇本弹窗 -->
+  <div id="book-modal" class="modal-overlay hidden">
+    <div class="modal">
+      <h3>新建词汇本</h3>
+      <label>词汇本名称</label>
+      <input id="book-name" class="neo-input" type="text" placeholder="例如：六级真题生词" />
+      <div class="btn-row">
+        <button id="book-create" class="neo-btn primary">创建</button>
+        <button id="book-cancel" class="neo-btn">取消</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 编辑弹窗 -->
+  <div id="edit-modal" class="modal-overlay hidden">
+    <div class="modal">
+      <h3>编辑单词</h3>
+      <label>单词</label>
+      <input id="edit-word" class="neo-input" type="text" />
+      <label>释义</label>
+      <input id="edit-meaning" class="neo-input" type="text" />
+      <label>例句原文</label>
+      <textarea id="edit-example" class="neo-textarea" rows="3"></textarea>
+      <label>例句译文</label>
+      <textarea id="edit-example-trans" class="neo-textarea" rows="2"></textarea>
+      <div class="btn-row">
+        <button id="edit-save" class="neo-btn primary">保存</button>
+        <button id="edit-cancel" class="neo-btn">取消</button>
+      </div>
+    </div>
+  </div>
+
+  <input id="file-import" type="file" accept=".csv,.json,.txt" class="hidden" />
+
+  <script src="scheduler.js"></script>
+  <script src="dictionary.js"></script>
+  <script src="cet6-data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,211 @@
+/**
+ * 内置离线六级词库（示例版）
+ * 正式发布时可替换为完整开源词库（如 ECDICT），或通过"导入词表"功能扩展。
+ */
+const OFFLINE_DICT = {
+  abandon: 'v. 放弃；抛弃',
+  abundant: 'adj. 丰富的；充裕的',
+  accelerate: 'v. 加速；促进',
+  accommodate: 'v. 容纳；适应；提供住宿',
+  accumulate: 'v. 积累；聚集',
+  acquisition: 'n. 获得；收购；习得',
+  adequate: 'adj. 足够的；适当的',
+  adjust: 'v. 调整；适应',
+  administration: 'n. 管理；行政部门',
+  advocate: 'v. 提倡；拥护 n. 倡导者',
+  aggressive: 'adj. 侵略的；有进取心的',
+  allocate: 'v. 分配；拨给',
+  alternative: 'n. 选择；替代方案 adj. 可替代的',
+  ambiguous: 'adj. 模糊的；不明确的',
+  analyze: 'v. 分析；解析',
+  anticipate: 'v. 预期；期望',
+  apparent: 'adj. 明显的；表面上的',
+  appeal: 'v. 呼吁；吸引 n. 上诉；吸引力',
+  appreciate: 'v. 欣赏；感激；理解',
+  approach: 'v. 接近；处理 n. 方法；路径',
+  appropriate: 'adj. 适当的；恰当的',
+  assess: 'v. 评估；估价',
+  assign: 'v. 分配；指派；布置',
+  assume: 'v. 假定；承担；呈现',
+  attain: 'v. 达到；获得',
+  attribute: 'v. 把…归因于 n. 属性；特质',
+  available: 'adj. 可用的；有空的',
+  barrier: 'n. 障碍；屏障',
+  benefit: 'n. 利益；好处 v. 使受益',
+  boost: 'v. 促进；增加；提升',
+  budget: 'n. 预算 v. 编预算',
+  capacity: 'n. 容量；能力；产能',
+  category: 'n. 类别；范畴',
+  cease: 'v. 停止；终止',
+  challenge: 'n. 挑战 v. 向…挑战',
+  circumstance: 'n. 环境；情况；条件',
+  collaborate: 'v. 协作；合作',
+  commit: 'v. 承诺；犯（罪）；投入',
+  compete: 'v. 竞争；比赛',
+  complex: 'adj. 复杂的 n. 综合体',
+  comprehensive: 'adj. 全面的；综合的',
+  concept: 'n. 概念；观念',
+  conclude: 'v. 得出结论；结束',
+  confident: 'adj. 自信的；确信的',
+  conflict: 'n. 冲突；矛盾 v. 冲突',
+  consequence: 'n. 后果；结果',
+  considerable: 'adj. 相当大的；重要的',
+  consist: 'v. 组成；构成',
+  constant: 'adj. 持续的；恒定的 n. 常数',
+  constrain: 'v. 限制；约束',
+  construct: 'v. 建造；构建',
+  consult: 'v. 咨询；查阅；商议',
+  consume: 'v. 消耗；消费；吃',
+  contemporary: 'adj. 当代的；同时代的',
+  contribute: 'v. 贡献；投稿；促成',
+  controversy: 'n. 争议；争论',
+  convey: 'v. 传达；运送',
+  cooperate: 'v. 合作；配合',
+  cope: 'v. 应对；处理',
+  crucial: 'adj. 关键的；至关重要的',
+  cultivate: 'v. 培养；耕种；栽培',
+  decline: 'v. 下降；拒绝 n. 衰退',
+  dedicate: 'v. 奉献；致力于',
+  demonstrate: 'v. 证明；展示；游行',
+  derive: 'v. 源于；获得',
+  despite: 'prep. 尽管；不管',
+  determine: 'v. 决定；确定；查明',
+  devote: 'v. 投入；奉献',
+  dimension: 'n. 维度；尺寸；方面',
+  distinct: 'adj. 不同的；清晰的',
+  dominate: 'v. 支配；主导',
+  efficient: 'adj. 高效的；有效率的',
+  eliminate: 'v. 消除；淘汰',
+  emerge: 'v. 出现；浮现',
+  emphasis: 'n. 强调；重点',
+  enhance: 'v. 增强；提高',
+  enormous: 'adj. 巨大的；庞大的',
+  essential: 'adj. 必要的；本质的 n. 要素',
+  establish: 'v. 建立；确立',
+  evaluate: 'v. 评价；评估',
+  evident: 'adj. 明显的；显然的',
+  exaggerate: 'v. 夸大；夸张',
+  exceed: 'v. 超过；超越',
+  exclude: 'v. 排除；不包括',
+  exhibit: 'v. 展示；表现出 n. 展品',
+  expand: 'v. 扩张；扩大；展开',
+  exploit: 'v. 开发；利用；剥削',
+  extensive: 'adj. 广泛的；大量的',
+  facilitate: 'v. 促进；使便利',
+  feature: 'n. 特征；特色 v. 以…为特色',
+  fluctuate: 'v. 波动；起伏',
+  foster: 'v. 培养；促进；收养',
+  fundamental: 'adj. 基本的；根本的 n. 基本原理',
+  generate: 'v. 产生；生成；发电',
+  genuine: 'adj. 真实的；真诚的',
+  guarantee: 'v. 保证；担保 n. 保证',
+  identify: 'v. 识别；确认；认同',
+  illustrate: 'v. 说明；举例说明；配图',
+  imply: 'v. 暗示；意味着',
+  impose: 'v. 强加；征收',
+  incentive: 'n. 激励；动机',
+  inevitable: 'adj. 不可避免的',
+  infer: 'v. 推断；推论',
+  integrate: 'v. 整合；融合；使一体化',
+  interpret: 'v. 解释；口译；理解',
+  intrinsic: 'adj. 内在的；固有的',
+  justify: 'v. 证明…正当；辩护',
+  legitimate: 'adj. 合法的；正当的',
+  maintain: 'v. 维持；保持；维修',
+  manufacture: 'v. 制造；生产 n. 制造业',
+  margin: 'n. 边缘；差额；利润',
+  modify: 'v. 修改；调整',
+  negotiate: 'v. 谈判；协商',
+  obstacle: 'n. 障碍；阻碍',
+  obtain: 'v. 获得；得到',
+  occupy: 'v. 占据；占用；使忙于',
+  outcome: 'n. 结果；成果',
+  overall: 'adj. 总的；全面的 adv. 总的来说',
+  perceive: 'v. 感知；认为；察觉',
+  persist: 'v. 坚持；持续存在',
+  phenomenon: 'n. 现象；非凡的人（或事物）',
+  policy: 'n. 政策；方针；保险单',
+  potential: 'adj. 潜在的 n. 潜力；可能性',
+  precise: 'adj. 精确的；准确的',
+  predict: 'v. 预测；预言',
+  preserve: 'v. 保护；保存；维持',
+  priority: 'n. 优先；重点；优先权',
+  profound: 'adj. 深刻的；深远的',
+  prominent: 'adj. 突出的；杰出的',
+  prospect: 'n. 前景；前途；可能性',
+  pursue: 'v. 追求；继续；从事',
+  random: 'adj. 随机的；任意的',
+  relevant: 'adj. 相关的；切题的',
+  reluctant: 'adj. 不情愿的；勉强的',
+  rely: 'v. 依赖；依靠；信赖',
+  remarkable: 'adj. 显著的；非凡的',
+  resistance: 'n. 抵抗；阻力；反抗',
+  restrict: 'v. 限制；约束',
+  reveal: 'v. 揭示；透露；显示',
+  reverse: 'v. 逆转；颠倒 n. 相反；背面',
+  rigid: 'adj. 严格的；僵硬的',
+  significant: 'adj. 重要的；显著的',
+  sophisticated: 'adj. 复杂的；精密的；老练的',
+  stable: 'adj. 稳定的；牢固的',
+  strategy: 'n. 策略；战略',
+  subsequent: 'adj. 随后的；后来的',
+  substantial: 'adj. 大量的；实质的；结实的',
+  sufficient: 'adj. 足够的；充分的',
+  tendency: 'n. 趋势；倾向',
+  transform: 'v. 转变；改造；使变形',
+  ultimate: 'adj. 最终的；极限的 n. 终极',
+  undergo: 'v. 经历；经受；接受',
+  unique: 'adj. 独特的；唯一的',
+  valid: 'adj. 有效的；合理的',
+  vary: 'v. 变化；不同；使多样化',
+  vast: 'adj. 广阔的；巨大的',
+  vital: 'adj. 至关重要的；有活力的',
+  widespread: 'adj. 广泛的；普遍的',
+  withdraw: 'v. 撤回；取款；退出',
+  yield: 'v. 产出；屈服；让出 n. 产量'
+};
+
+const PREFIX_MAP = {
+  'n.': '名词',
+  'v.': '动词',
+  'adj.': '形容词',
+  'adv.': '副词',
+  'prep.': '介词',
+  'conj.': '连词',
+  'pron.': '代词'
+};
+
+function normalizeWord(w) {
+  return String(w || '').trim().toLowerCase();
+}
+
+function lookupWord(word) {
+  const key = normalizeWord(word);
+  if (!key) return null;
+  if (Object.prototype.hasOwnProperty.call(OFFLINE_DICT, key)) {
+    return { word: key, meaning: OFFLINE_DICT[key], source: 'offline' };
+  }
+  return null;
+}
+
+function suggestWords(query, limit) {
+  const q = normalizeWord(query);
+  if (!q) return [];
+  return Object.keys(OFFLINE_DICT)
+    .filter((w) => w.startsWith(q) || w.includes(q))
+    .slice(0, limit || 8)
+    .map((w) => ({ word: w, meaning: OFFLINE_DICT[w] }));
+}
+
+function wordCount() {
+  return Object.keys(OFFLINE_DICT).length;
+}
+
+window.Dictionary = {
+  OFFLINE_DICT,
+  PREFIX_MAP,
+  normalizeWord,
+  lookupWord,
+  suggestWords,
+  wordCount
+};
