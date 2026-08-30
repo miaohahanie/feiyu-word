@@ -10,6 +10,7 @@
     "test": "electron . --smoke-test",
     "dist": "node scripts/ensure-electron.js && electron-builder --win",
     "build:cet6": "node scripts/build-cet6.js",
+    "build:cet4": "node scripts/build-cet4.js",
     "build:dict": "node scripts/build-dict.js",
     "make:tray": "node scripts/make-tray-icon.js",
     "make:appicon": "node scripts/make-icon.js",

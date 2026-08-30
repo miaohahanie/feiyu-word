@@ -168,6 +168,21 @@
       });
     }
 
+    // 内置四级词汇本（只创建一次）
+    if (!data.books.some((b) => b.builtinCET4)) {
+      const rows = window.CET4_WORDS || [];
+      const words = rows.map((row, i) => makeSeedWord(row, i));
+      data.books.unshift({
+        id: 'book-cet4',
+        name: '四级词汇 · 内置',
+        description: '内置 CET-4 词表（' + (window.CET4_WORDS_COUNT || words.length) + ' 词）',
+        builtin: true,
+        builtinCET4: true,
+        createdAt: Date.now(),
+        words: words
+      });
+    }
+
     if (!data.settings.activeBookId || !data.books.some((b) => b.id === data.settings.activeBookId)) {
       data.settings.activeBookId = data.books[0].id;
     }
@@ -544,6 +559,27 @@
     switchTab('words');
   }
 
+  function deleteBook() {
+    const book = currentBook();
+    if (!book) return;
+    if (book.builtin) {
+      alert('内置词汇本（' + book.name + '）不可删除。');
+      return;
+    }
+    if (data.books.length <= 1) {
+      alert('至少需要保留一个词汇本。');
+      return;
+    }
+    if (!confirm('确定删除词汇本「' + book.name + '」？（含其中 ' + book.words.length + ' 个单词，不可恢复）')) return;
+    data.books = data.books.filter((b) => b.id !== book.id);
+    if (data.settings.activeBookId === book.id || !data.books.some((b) => b.id === data.settings.activeBookId)) {
+      data.settings.activeBookId = data.books[0].id;
+    }
+    scheduleSave();
+    renderAll();
+    switchTab('words');
+  }
+
   /* ---------------- 单词本 ---------------- */
 
   function renderWords() {
@@ -907,6 +943,7 @@
       switchTab('words');
     });
     $('#btn-new-book').addEventListener('click', openBookModal);
+    $('#btn-delete-book').addEventListener('click', deleteBook);
     $('#book-create').addEventListener('click', createBook);
     $('#book-cancel').addEventListener('click', closeBookModal);
     $('#book-modal').addEventListener('click', (e) => {
