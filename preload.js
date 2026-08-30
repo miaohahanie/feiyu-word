@@ -8,6 +8,8 @@ contextBridge.exposeInMainWorld('petAPI', {
   setWindowMode: (mode) => ipcRenderer.invoke('set-window-mode', mode),
   getWindowPosition: () => ipcRenderer.invoke('get-window-position'),
   setWindowPosition: (x, y) => ipcRenderer.invoke('set-window-position', x, y),
+  beginWindowDrag: () => ipcRenderer.invoke('begin-window-drag'),
+  endWindowDrag: () => ipcRenderer.invoke('end-window-drag'),
   getAutoLaunch: () => ipcRenderer.invoke('get-auto-launch'),
   setAutoLaunch: (enabled) => ipcRenderer.invoke('set-auto-launch', enabled),
   lookupOnline: (word) => ipcRenderer.invoke('lookup-online', word),

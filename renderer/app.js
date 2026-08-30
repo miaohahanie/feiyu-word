@@ -289,6 +289,11 @@
       info = await onlineLookup(word);
       if (info) window.Dictionary.cacheWord(word, info);
     }
+    // 在线查询（有道/翻译/英文释义）返回的结果可能不含 word 字段，
+    // 补齐当前查询词，避免入库 key 变成 "undefined"、显示成上一次查的词。
+    if (info && !info.word) {
+      info = Object.assign({}, info, { word: String(word).toLowerCase() });
+    }
 
     if (!info) {
       if (seq !== querySeq) return;
@@ -803,6 +808,18 @@
     }
   }
 
+  function beginWindowDrag() {
+    if (window.petAPI && window.petAPI.beginWindowDrag) {
+      window.petAPI.beginWindowDrag();
+    }
+  }
+
+  function endWindowDrag() {
+    if (window.petAPI && window.petAPI.endWindowDrag) {
+      window.petAPI.endWindowDrag();
+    }
+  }
+
   let petDrag = null;
   let petDragMoved = false;
 
@@ -834,6 +851,8 @@
       const [wx, wy] = await getWindowPosition();
       petDrag = { sx: e.screenX, sy: e.screenY, wx, wy };
       petDragMoved = false;
+      // 记住拖动开始时的窗口尺寸，防止 Windows 透明窗在移动时尺寸漂移（面板被拉伸）
+      beginWindowDrag();
       e.preventDefault();
     });
 
@@ -853,6 +872,7 @@
       if (!petDrag) return;
       const moved = petDragMoved;
       petDrag = null;
+      endWindowDrag();
       if (!moved) togglePanel();
     });
 

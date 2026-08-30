@@ -27,6 +27,9 @@ let win = null;
 let tray = null;
 let dataFile = null;
 let windowMode = 'panel';
+// 拖动期间固定的窗口尺寸：Windows 透明无边框窗在 setPosition 时会把尺寸带偏（electron#10862），
+// 导致拖动时面板被异常拉伸。这里在拖动开始时记住尺寸，移动时用 setBounds 固定尺寸，避免漂移。
+let dragBounds = null;
 
 const PET_W = 250;
 const PET_H = 210;
@@ -363,7 +366,31 @@ ipcMain.handle('get-window-position', () => {
 });
 
 ipcMain.handle('set-window-position', (event, x, y) => {
-  if (win && !win.isDestroyed()) win.setPosition(Math.round(x), Math.round(y));
+  if (win && !win.isDestroyed()) {
+    // 用 setBounds 并固定拖动开始时的尺寸，而非 setPosition。
+    // setPosition 内部会重读 GetSize()，在 Windows 高 DPI 下每次都会让尺寸持续增大。
+    if (dragBounds) {
+      win.setBounds({ x: Math.round(x), y: Math.round(y), width: dragBounds.width, height: dragBounds.height });
+    } else {
+      const b = win.getBounds();
+      win.setBounds({ x: Math.round(x), y: Math.round(y), width: b.width, height: b.height });
+    }
+  }
+  return true;
+});
+
+ipcMain.handle('begin-window-drag', () => {
+  if (win && !win.isDestroyed()) {
+    const b = win.getBounds();
+    dragBounds = { width: b.width, height: b.height };
+  } else {
+    dragBounds = null;
+  }
+  return true;
+});
+
+ipcMain.handle('end-window-drag', () => {
+  dragBounds = null;
   return true;
 });
 
