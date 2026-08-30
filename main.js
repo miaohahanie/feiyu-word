@@ -177,12 +177,35 @@ function createWindow() {
               // 查询 CET6 词但不在示例词库中：验证完整离线词典命中
               const input3 = document.querySelector('#query-input');
               input3.value = 'abide';
-              document.querySelector('#query-btn').click();
+              input3.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
               await new Promise(r => setTimeout(r, 700));
               const abideText = document.querySelector('#query-result').innerText || '';
               const offlineHit = abideText.includes('遵守') && abideText.includes('离线词库');
               const wordsAfterAbide = window.__petDebug.currentBook().words.length;
-              return { added, meaning, word, reviewVisible, feedbackVisible, books, activeBookName, newBookWords, offlineHit, wordsAfterAbide };
+              // 缓存命中场景：词在本地缓存，应能进入当前词汇本并显示结果
+              window.Dictionary.cacheWord('zzunique', { meaning: '测试释义', phonetic: '' });
+              const input4 = document.querySelector('#query-input');
+              input4.value = 'zzunique';
+              document.querySelector('#query-btn').click();
+              await new Promise(r => setTimeout(r, 500));
+              const cacheText = document.querySelector('#query-result').innerText || '';
+              const cacheAdded =
+                window.__petDebug.currentBook().words.some((w) => w.word === 'zzunique') &&
+                cacheText.includes('测试释义') &&
+                cacheText.includes('本地缓存');
+              // 在内置六级词汇本中查询已存在的 CET6 词，验证显示会更新为当前词
+              const builtinId = window.__petDebug.getData().books.find((b) => b.builtinCET6).id;
+              const bookSelect = document.querySelector('#book-select');
+              bookSelect.value = builtinId;
+              bookSelect.dispatchEvent(new Event('change'));
+              await new Promise(r => setTimeout(r, 150));
+              const input5 = document.querySelector('#query-input');
+              input5.value = 'abide';
+              input5.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+              await new Promise(r => setTimeout(r, 500));
+              const builtinText = document.querySelector('#query-result').innerText || '';
+              const builtinDisplayOk = builtinText.includes('查询：abide') && builtinText.includes('abide');
+              return { added, meaning, word, reviewVisible, feedbackVisible, books, activeBookName, newBookWords, offlineHit, wordsAfterAbide, cacheAdded, builtinDisplayOk };
             })()`
           );
           console.log('SMOKE_RESULT ' + JSON.stringify({ ...result, query }));
@@ -201,7 +224,9 @@ function createWindow() {
             query.activeBookName === '测试本' &&
             query.newBookWords === 1 &&
             query.offlineHit === true &&
-            query.wordsAfterAbide === 2;
+            query.wordsAfterAbide === 2 &&
+            query.cacheAdded === true &&
+            query.builtinDisplayOk === true;
           console.log(ok ? 'SMOKE_OK' : 'SMOKE_FAIL');
           app.exit(ok ? 0 : 1);
         } catch (e) {

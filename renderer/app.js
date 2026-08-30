@@ -174,7 +174,10 @@
   }
 
   function currentBook() {
-    return data.books.find((b) => b.id === data.settings.activeBookId) || data.books[0];
+    const book = data.books.find((b) => b.id === data.settings.activeBookId) || data.books[0];
+    // 防御：旧/损坏数据中缺少 words 数组时补上，避免查询"假成功"
+    if (book && !Array.isArray(book.words)) book.words = [];
+    return book;
   }
 
   function currentWords() {
@@ -311,8 +314,19 @@
       }
     }
 
-    const record = addOrUpdateWord(info, example);
-    scheduleSave();
+    let record;
+    try {
+      record = addOrUpdateWord(info, example);
+      saveNow(); // 立即写入磁盘，避免快速关窗导致单词丢失
+    } catch (err) {
+      if (seq !== querySeq) return;
+      $('#query-result').innerHTML =
+        '<div class="query-word-header">🔍 查询：' + escapeHtml(word) + '</div>' +
+        '<div class="error-box">保存到单词本失败：' + escapeHtml((err && err.message) || String(err)) + '</div>';
+      setPet('calm', '保存失败，稍后再试');
+      if (input.value.trim() === word) input.value = '';
+      return;
+    }
 
     // 如果期间又发起了新查询，旧结果不再渲染，避免覆盖新结果
     if (seq !== querySeq) return;
