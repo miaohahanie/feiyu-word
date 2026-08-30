@@ -292,6 +292,13 @@ ipcMain.handle('window-hide', () => {
   return false;
 });
 
+ipcMain.handle('set-ignore-mouse', (event, ignore) => {
+  if (win && !win.isDestroyed()) {
+    win.setIgnoreMouseEvents(!!ignore, { forward: true });
+  }
+  return true;
+});
+
 ipcMain.handle('get-auto-launch', () => {
   try { return app.getLoginItemSettings().openAtLogin; } catch (e) { return false; }
 });

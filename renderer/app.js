@@ -726,8 +726,15 @@
     if (tab === 'stats') renderStats();
   }
 
+  function setClickThrough(ignore) {
+    if (window.petAPI && window.petAPI.setIgnoreMouseEvents) {
+      window.petAPI.setIgnoreMouseEvents(ignore);
+    }
+  }
+
   function openPanel() {
     $('#panel').classList.remove('hidden');
+    setClickThrough(false);
     setPet('summon', '我在呢！');
     setTimeout(() => {
       if (currentTab === 'query') $('#query-input').focus();
@@ -736,7 +743,15 @@
 
   function closePanel() {
     $('#panel').classList.add('hidden');
+    setClickThrough(true);
     setPet('idle');
+  }
+
+  function isOverPet(x, y) {
+    const img = $('#pet-img');
+    if (!img) return false;
+    const r = img.getBoundingClientRect();
+    return x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
   }
 
   /* ---------------- 初始化 ---------------- */
@@ -746,15 +761,21 @@
       btn.addEventListener('click', () => switchTab(btn.dataset.tab));
     });
 
-    $('#pet-bar').addEventListener('click', (e) => {
-      if (e.target.closest('.pet-actions')) return;
-      openPanel();
+    $('#pet-bar').addEventListener('click', () => {
+      if ($('#panel').classList.contains('hidden')) openPanel();
+      else closePanel();
     });
 
-    $('#btn-minimize').addEventListener('click', closePanel);
-    $('#btn-close').addEventListener('click', () => {
-      closePanel();
-      if (window.petAPI) window.petAPI.hideWindow();
+    // 面板隐藏时：只有鼠标在桌宠身上时窗口才接收点击，其余区域点击穿透
+    document.addEventListener('mousemove', (e) => {
+      if (!$('#panel').classList.contains('hidden')) {
+        setClickThrough(false);
+        return;
+      }
+      setClickThrough(!isOverPet(e.clientX, e.clientY));
+    });
+    document.addEventListener('mouseleave', () => {
+      if ($('#panel').classList.contains('hidden')) setClickThrough(true);
     });
 
     $('#query-btn').addEventListener('click', handleQuery);
@@ -875,6 +896,7 @@
     migrateAndEnsureBooks();
     bindEvents();
     renderAll();
+    setClickThrough(true);
 
     const auto = await getAutoLaunch();
     $('#setting-auto-launch').checked = auto;
