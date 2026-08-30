@@ -12,7 +12,8 @@ Windows 桌面单词记忆桌宠：**阅读驱动式查词 + 剪贴板例句记�
 - 🔄 **开机自启动**：设置页一键开启。
 - 📖 **多词汇本**：可新建自定义词汇本并切换；查词、复习、导入导出均作用于当前词汇本。
 - 📗 **内置六级词汇本**：内置 1945 个 CET-6 词条（含音标、中文释义、词频），来源 [cet-words-cli](https://www.npmjs.com/package/cet-words-cli)（MIT License）。
-- 🔍 **快捷键呼出查词**：全局快捷键 `Alt + W` 呼出，输入英文单词立即显示翻译（离线词库优先，在线兜底）。
+- 📦 **离线词典 5760 词**：内置 CET4 + CET6 完整词表，离线即可查绝大多数六级词汇；在线查过的词自动缓存到本地，之后无网也能查。
+- 🔍 **多源在线兜底**：离线未命中时依次尝试 有道词典 → MyMemory 翻译 → Free Dictionary API（英文释义），任一成功即返回并缓存。
 - 📋 **例句自动记录**：自动读取剪贴板，找到包含该词的句子则提取并翻译保存；没有/不匹配则静默跳过。
 - 🧠 **识读复习**：看英文（有原文则贴原文）→ 键入中文意思（无选项）→ 展示原文与正确释义 → 自评 0～10 掌握度。
 - 📈 **自适应记忆曲线**：基于 SM-2/FSRS 风格算法，高分拉长间隔、低分拉短间隔，用户无需理解细节。
@@ -45,8 +46,8 @@ npm run dist
 
 产物在 `dist/` 目录：
 
-- `单词桌宠-0.2.0-Setup.exe` —— 安装版（NSIS，可选择安装目录）
-- `单词桌宠-0.2.0-Portable.exe` —— 绿色便携版，双击即用
+- `单词桌宠-0.2.3-Setup.exe` —— 安装版（NSIS，可选择安装目录）
+- `单词桌宠-0.2.3-Portable.exe` —— 绿色便携版，双击即用
 
 > 已配置 electron-builder（NSIS + Portable），应用图标为 `assets/icon.ico`；`dist/` 已在 `.gitignore` 中忽略，不会提交到 git。
 
@@ -71,16 +72,21 @@ npm run dist
 ├── main.js               # Electron 主进程：窗口/托盘/快捷键/自启动/剪贴板/在线查词/翻译
 ├── preload.js            # 安全桥接（contextBridge）
 ├── assets/
-│   └── tray-icon.png     # 托盘图标
+│   ├── tray-icon.png     # 托盘图标
+│   ├── icon.png          # 应用图标（256x256）
+│   └── icon.ico          # Windows 图标
 ├── scripts/
 │   ├── ensure-electron.js# 自动补齐 Electron 二进制
-│   ├── build-cet6.js     # 从 cet-words-cli 生成内置六级词表
+│   ├── build-cet6.js     # 从 cet-words-cli 生成内置六级词汇本
+│   ├── build-dict.js     # 从 cet-words-cli 生成完整离线词典（5760 词）
+│   ├── make-icon.js      # 生成应用图标
 │   └── make-tray-icon.js # 生成托盘图标
 ├── renderer/
 │   ├── index.html        # 界面
 │   ├── styles.css        # 新野兽派风格
 │   ├── app.js            # 页面逻辑
-│   ├── dictionary.js     # 内置离线六级词库（示例）
+│   ├── dictionary.js     # 离线词典索引 + 本地查询缓存
+│   ├── dict-data.js      # 完整离线词典（CET4+CET6，5760 词，由脚本生成）
 │   ├── cet6-data.js      # 内置 CET-6 词表（1945 词，由脚本生成）
 │   └── scheduler.js      # SM-2/FSRS 风格自适应调度
 ├── 素材/                 # 桌宠 GIF（直接复用）

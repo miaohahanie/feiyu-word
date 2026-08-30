@@ -1,6 +1,8 @@
 /**
- * 内置离线六级词库（示例版）
- * 正式发布时可替换为完整开源词库（如 ECDICT），或通过"导入词表"功能扩展。
+ * 离线词典：
+ * - 完整内置 CET4 + CET6 词表（renderer/dict-data.js，5760 词）
+ * - 叠加示例离线词库 OFFLINE_DICT（140 词，作为兜底补充）
+ * - 查询成功后自动缓存到 localStorage，之后可完全离线查询
  */
 const OFFLINE_DICT = {
   abandon: 'v. 放弃；抛弃',
@@ -179,11 +181,58 @@ function normalizeWord(w) {
   return String(w || '').trim().toLowerCase();
 }
 
+/* 构建索引：完整词典（CET4+CET6）优先，示例词库补充缺失词条 */
+const DICT_INDEX = {};
+(function buildIndex() {
+  const rows = window.DICT_WORDS || [];
+  for (const row of rows) {
+    const word = normalizeWord(row && row[0]);
+    if (!word || DICT_INDEX[word]) continue;
+    DICT_INDEX[word] = {
+      meaning: String(row[1] || ''),
+      phonetic: String(row[2] || ''),
+      frequency: Number(row[3]) || 0,
+      level: String(row[4] || '')
+    };
+  }
+  for (const key of Object.keys(OFFLINE_DICT)) {
+    if (!DICT_INDEX[key]) {
+      DICT_INDEX[key] = { meaning: OFFLINE_DICT[key], phonetic: '', frequency: 0, level: 'demo' };
+    }
+  }
+})();
+
+/* 本地查询缓存：在线查过的词存到这里，之后完全离线也能查出 */
+let DICT_CACHE = {};
+try {
+  DICT_CACHE = JSON.parse(localStorage.getItem('word-pet-dict-cache') || '{}');
+} catch (e) {
+  DICT_CACHE = {};
+}
+
+function cacheWord(word, info) {
+  const key = normalizeWord(word);
+  if (!key || !info || !info.meaning) return;
+  DICT_CACHE[key] = {
+    meaning: String(info.meaning),
+    phonetic: String(info.phonetic || '')
+  };
+  try {
+    localStorage.setItem('word-pet-dict-cache', JSON.stringify(DICT_CACHE));
+  } catch (e) {
+    /* ignore */
+  }
+}
+
 function lookupWord(word) {
   const key = normalizeWord(word);
   if (!key) return null;
-  if (Object.prototype.hasOwnProperty.call(OFFLINE_DICT, key)) {
-    return { word: key, meaning: OFFLINE_DICT[key], source: 'offline' };
+  const idx = DICT_INDEX[key];
+  if (idx && idx.meaning) {
+    return { word: key, meaning: idx.meaning, phonetic: idx.phonetic, source: 'offline' };
+  }
+  if (DICT_CACHE[key] && DICT_CACHE[key].meaning) {
+    return { word: key, meaning: DICT_CACHE[key].meaning, phonetic: DICT_CACHE[key].phonetic || '', source: 'cache' };
   }
   return null;
 }
@@ -191,21 +240,23 @@ function lookupWord(word) {
 function suggestWords(query, limit) {
   const q = normalizeWord(query);
   if (!q) return [];
-  return Object.keys(OFFLINE_DICT)
+  return Object.keys(DICT_INDEX)
     .filter((w) => w.startsWith(q) || w.includes(q))
     .slice(0, limit || 8)
-    .map((w) => ({ word: w, meaning: OFFLINE_DICT[w] }));
+    .map((w) => ({ word: w, meaning: DICT_INDEX[w].meaning }));
 }
 
 function wordCount() {
-  return Object.keys(OFFLINE_DICT).length;
+  return Object.keys(DICT_INDEX).length;
 }
 
 window.Dictionary = {
   OFFLINE_DICT,
   PREFIX_MAP,
+  DICT_INDEX,
   normalizeWord,
   lookupWord,
   suggestWords,
-  wordCount
+  wordCount,
+  cacheWord
 };

@@ -103,6 +103,19 @@
       .replace(/'/g, '&#39;');
   }
 
+  const SOURCE_LABELS = {
+    offline: '离线词库（5760 词）',
+    cache: '本地缓存',
+    book: '已有词汇本',
+    youdao: '在线 · 有道',
+    mymemory: '在线 · 翻译',
+    dictionaryapi: '在线 · 英文释义'
+  };
+
+  function sourceLabel(src) {
+    return SOURCE_LABELS[src] || src || '未知';
+  }
+
   /* ---------------- 词汇本 ---------------- */
 
   function makeSeedWord(row, idx) {
@@ -251,15 +264,32 @@
     setPet('thinking', '帮你查一下～');
 
     let info = window.Dictionary.lookupWord(word);
-    let onlineFallback = false;
+    if (!info) {
+      // 兜底：任何词汇本里已经收录过的词，直接用已有释义
+      const key = String(word).toLowerCase();
+      const fromBook = data.books.reduce(
+        (acc, b) => acc || (b.words || []).find((w) => w.word.toLowerCase() === key),
+        null
+      );
+      if (fromBook) {
+        info = {
+          word: fromBook.word,
+          meaning: fromBook.meaning,
+          phonetic: fromBook.phonetic || '',
+          source: 'book'
+        };
+      }
+    }
     if (!info) {
       info = await onlineLookup(word);
-      onlineFallback = !!info;
+      if (info) window.Dictionary.cacheWord(word, info);
     }
 
     if (!info) {
       $('#query-result').innerHTML =
-        '<div class="error-box">没有找到「' + escapeHtml(word) + '」的释义，请检查拼写或稍后再试（离线词库未命中，在线查询失败）。</div>';
+        '<div class="error-box">没有找到「' + escapeHtml(word) + '」的释义。' +
+        '离线词典（5760 词）未命中，在线查询也失败（可能无网络或服务不可用）。<br>' +
+        '你可以：检查网络后重试，或在“单词本 → 导入”中导入更完整的词表。</div>';
       setPet('calm', '这个词暂时没查到…');
       return;
     }
@@ -293,7 +323,7 @@
       '<div class="result-word">' + escapeHtml(record.word) + '</div>' +
       (record.phonetic ? '<div class="result-phonetic">' + escapeHtml(record.phonetic) + '</div>' : '') +
       '<div class="result-meaning">' + escapeHtml(record.meaning) + '</div>' +
-      '<div class="result-source">来源：' + escapeHtml(info.source || 'offline') + (onlineFallback ? '（在线兜底）' : '（离线词库）') + '</div>' +
+      '<div class="result-source">来源：' + escapeHtml(sourceLabel(info.source)) + '</div>' +
       exampleHtml +
       '<div class="notice">✅ 已加入单词本（' + escapeHtml(currentBook().name) + '）' + existingNote + '</div>' +
       '</div>';

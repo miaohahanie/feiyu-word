@@ -138,7 +138,7 @@ function createWindow() {
       setTimeout(async () => {
         try {
           const result = await win.webContents.executeJavaScript(
-            '({ dict: typeof window.Dictionary, sched: typeof window.Scheduler, app: !!document.querySelector("#app"), words: document.querySelectorAll(".tab").length, cet6: window.CET6_WORDS_COUNT })'
+            '({ dict: typeof window.Dictionary, sched: typeof window.Scheduler, app: !!document.querySelector("#app"), words: document.querySelectorAll(".tab").length, cet6: window.CET6_WORDS_COUNT, dictCount: window.Dictionary.wordCount() })'
           );
           const query = await win.webContents.executeJavaScript(
             `(async () => {
@@ -174,7 +174,14 @@ function createWindow() {
               document.querySelector('#query-btn').click();
               await new Promise(r => setTimeout(r, 700));
               const newBookWords = window.__petDebug.currentBook().words.length;
-              return { added, meaning, word, reviewVisible, feedbackVisible, books, activeBookName, newBookWords };
+              // 查询 CET6 词但不在示例词库中：验证完整离线词典命中
+              const input3 = document.querySelector('#query-input');
+              input3.value = 'abide';
+              document.querySelector('#query-btn').click();
+              await new Promise(r => setTimeout(r, 700));
+              const abideText = document.querySelector('#query-result').innerText || '';
+              const offlineHit = abideText.includes('遵守') && abideText.includes('离线词库');
+              return { added, meaning, word, reviewVisible, feedbackVisible, books, activeBookName, newBookWords, offlineHit };
             })()`
           );
           console.log('SMOKE_RESULT ' + JSON.stringify({ ...result, query }));
@@ -184,13 +191,15 @@ function createWindow() {
             result.app === true &&
             result.words === 5 &&
             result.cet6 >= 1000 &&
+            result.dictCount >= 5000 &&
             query.added === true &&
             query.meaning === true &&
             query.reviewVisible === true &&
             query.feedbackVisible === true &&
             query.books >= 2 &&
             query.activeBookName === '测试本' &&
-            query.newBookWords === 1;
+            query.newBookWords === 1 &&
+            query.offlineHit === true;
           console.log(ok ? 'SMOKE_OK' : 'SMOKE_FAIL');
           app.exit(ok ? 0 : 1);
         } catch (e) {
@@ -351,26 +360,73 @@ function fetchWithTimeout(url, ms = 8000) {
 }
 
 ipcMain.handle('lookup-online', async (event, word) => {
-  if (!word || !/^[a-zA-Z][a-zA-Z\-' ]*$/.test(word)) return null;
+  const q = String(word || '').trim();
+  if (!q || !/^[a-zA-Z][a-zA-Z\-' ]*$/.test(q)) return null;
+
+  // 1) 有道词典（中文释义 + 音标）
+  try {
+    const res = await fetchWithTimeout('https://dict.youdao.com/jsonapi?q=' + encodeURIComponent(q));
+    if (res.ok) {
+      const data = await res.json();
+      const basic = data.basic || {};
+      const explains = Array.isArray(basic.explains) ? basic.explains : [];
+      const translation = Array.isArray(data.translation) ? data.translation : [];
+      const phonetic = basic['us-phonetic'] || basic['uk-phonetic'] || basic.phonetic || '';
+      if (explains.length || translation.length) {
+        return {
+          phonetic,
+          meaning: explains.join('；') || translation.join('；'),
+          source: 'youdao'
+        };
+      }
+    }
+  } catch (e) {
+    /* 尝试下一个源 */
+  }
+
+  // 2) MyMemory 整词翻译（英 → 中）
+  try {
+    const m = await fetchWithTimeout(
+      'https://api.mymemory.translated.net/get?q=' + encodeURIComponent(q) + '&langpair=en|zh-CN'
+    );
+    if (m.ok) {
+      const data = await m.json();
+      const translated = data && data.responseData && data.responseData.translatedText;
+      if (translated && translated.toLowerCase() !== q.toLowerCase()) {
+        return { phonetic: '', meaning: translated, source: 'mymemory' };
+      }
+    }
+  } catch (e) {
+    /* 尝试下一个源 */
+  }
+
+  // 3) Free Dictionary API（英文释义兜底）
   try {
     const res = await fetchWithTimeout(
-      'https://dict.youdao.com/jsonapi?q=' + encodeURIComponent(word.trim())
+      'https://api.dictionaryapi.dev/api/v2/entries/en/' + encodeURIComponent(q)
     );
-    if (!res.ok) return null;
-    const data = await res.json();
-    const basic = data.basic || {};
-    const explains = Array.isArray(basic.explains) ? basic.explains : [];
-    const translation = Array.isArray(data.translation) ? data.translation : [];
-    const phonetic = basic['us-phonetic'] || basic['uk-phonetic'] || basic.phonetic || '';
-    if (!explains.length && !translation.length) return null;
-    return {
-      phonetic,
-      meaning: explains.join('；') || translation.join('；'),
-      source: 'youdao'
-    };
+    if (res.ok) {
+      const data = await res.json();
+      const entry = Array.isArray(data) ? data[0] : null;
+      const defs = [];
+      if (entry && Array.isArray(entry.meanings)) {
+        entry.meanings.forEach((m) => {
+          (m.definitions || []).slice(0, 3).forEach((d) => {
+            if (d.definition) defs.push(d.definition);
+          });
+        });
+      }
+      if (defs.length) {
+        const phonetic =
+          (entry && (entry.phonetic || (entry.phonetics && entry.phonetics[0] && entry.phonetics[0].text))) || '';
+        return { phonetic, meaning: defs.join('；'), source: 'dictionaryapi' };
+      }
+    }
   } catch (e) {
-    return null;
+    /* 全部失败 */
   }
+
+  return null;
 });
 
 ipcMain.handle('translate-text', async (event, text) => {
