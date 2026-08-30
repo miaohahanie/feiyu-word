@@ -61,6 +61,7 @@
   let data = null;
   let saveTimer = null;
   let currentTab = 'query';
+  let querySeq = 0;
   let reviewQueue = [];
   let currentReview = null;
   let editingId = null;
@@ -260,6 +261,7 @@
     const input = $('#query-input');
     const word = input.value.trim();
     if (!word) return;
+    const seq = ++querySeq;
 
     setPet('thinking', '帮你查一下～');
 
@@ -286,11 +288,14 @@
     }
 
     if (!info) {
+      if (seq !== querySeq) return;
       $('#query-result').innerHTML =
+        '<div class="query-word-header">🔍 查询：' + escapeHtml(word) + '</div>' +
         '<div class="error-box">没有找到「' + escapeHtml(word) + '」的释义。' +
         '离线词典（5760 词）未命中，在线查询也失败（可能无网络或服务不可用）。<br>' +
         '你可以：检查网络后重试，或在“单词本 → 导入”中导入更完整的词表。</div>';
       setPet('calm', '这个词暂时没查到…');
+      if (input.value.trim() === word) input.value = '';
       return;
     }
 
@@ -309,6 +314,9 @@
     const record = addOrUpdateWord(info, example);
     scheduleSave();
 
+    // 如果期间又发起了新查询，旧结果不再渲染，避免覆盖新结果
+    if (seq !== querySeq) return;
+
     const exampleHtml = example
       ? '<div class="example-box"><div class="ex-text">📄 ' + escapeHtml(example.text) + '</div>' +
         (example.translation
@@ -319,6 +327,7 @@
 
     const existingNote = record._existed ? '（该词已在当前词汇本中）' : '';
     $('#query-result').innerHTML =
+      '<div class="query-word-header">🔍 查询：' + escapeHtml(word) + '</div>' +
       '<div class="result-card">' +
       '<div class="result-word">' + escapeHtml(record.word) + '</div>' +
       (record.phonetic ? '<div class="result-phonetic">' + escapeHtml(record.phonetic) + '</div>' : '') +
@@ -329,7 +338,7 @@
       '</div>';
 
     setPet('success', '已记进单词本啦！');
-    input.value = '';
+    if (input.value.trim() === word) input.value = '';
   }
 
   function addOrUpdateWord(info, example) {
@@ -831,6 +840,18 @@
       const moved = petDragMoved;
       petDrag = null;
       if (!moved) togglePanel();
+    });
+
+    // 内容过多时：上下方向键浏览面板内容
+    document.addEventListener('keydown', (e) => {
+      if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+      const tag = e.target && e.target.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+      if ($('#panel').classList.contains('hidden')) return;
+      const content = $('.content');
+      if (!content) return;
+      content.scrollTop += e.key === 'ArrowDown' ? 60 : -60;
+      e.preventDefault();
     });
 
     $('#query-btn').addEventListener('click', handleQuery);

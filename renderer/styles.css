@@ -290,6 +290,17 @@ h3 {
   margin-top: 10px;
 }
 
+.query-word-header {
+  display: inline-block;
+  border: 2px solid var(--ink);
+  background: var(--pink);
+  box-shadow: var(--shadow-sm);
+  padding: 6px 12px;
+  font-size: 15px;
+  font-weight: bold;
+  margin-bottom: 10px;
+}
+
 .result-card {
   border: var(--border);
   box-shadow: var(--shadow-sm);

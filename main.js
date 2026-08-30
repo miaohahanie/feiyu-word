@@ -181,7 +181,8 @@ function createWindow() {
               await new Promise(r => setTimeout(r, 700));
               const abideText = document.querySelector('#query-result').innerText || '';
               const offlineHit = abideText.includes('遵守') && abideText.includes('离线词库');
-              return { added, meaning, word, reviewVisible, feedbackVisible, books, activeBookName, newBookWords, offlineHit };
+              const wordsAfterAbide = window.__petDebug.currentBook().words.length;
+              return { added, meaning, word, reviewVisible, feedbackVisible, books, activeBookName, newBookWords, offlineHit, wordsAfterAbide };
             })()`
           );
           console.log('SMOKE_RESULT ' + JSON.stringify({ ...result, query }));
@@ -199,7 +200,8 @@ function createWindow() {
             query.books >= 2 &&
             query.activeBookName === '测试本' &&
             query.newBookWords === 1 &&
-            query.offlineHit === true;
+            query.offlineHit === true &&
+            query.wordsAfterAbide === 2;
           console.log(ok ? 'SMOKE_OK' : 'SMOKE_FAIL');
           app.exit(ok ? 0 : 1);
         } catch (e) {
