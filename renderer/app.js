@@ -30,7 +30,7 @@
   const petAsset = (name) => '../素材/' + encodeURIComponent(name);
 
   let petBubbleTimer = null;
-  function setPet(state, bubble) {
+  function setPet(state, bubble, duration) {
     const list = PET[state] || PET.idle;
     const name = Array.isArray(list) ? list[Math.floor(Math.random() * list.length)] : list;
     const img = $('#pet-img');
@@ -41,7 +41,7 @@
       el.textContent = bubble;
       el.classList.remove('hidden');
       clearTimeout(petBubbleTimer);
-      petBubbleTimer = setTimeout(() => el.classList.add('hidden'), 3200);
+      petBubbleTimer = setTimeout(() => el.classList.add('hidden'), duration || 3200);
     }
   }
 
@@ -726,15 +726,36 @@
     if (tab === 'stats') renderStats();
   }
 
-  function setClickThrough(ignore) {
-    if (window.petAPI && window.petAPI.setIgnoreMouseEvents) {
-      window.petAPI.setIgnoreMouseEvents(ignore);
+  function setWindowMode(mode) {
+    if (window.petAPI && window.petAPI.setWindowMode) {
+      window.petAPI.setWindowMode(mode);
     }
   }
 
+  function togglePanel() {
+    if ($('#panel').classList.contains('hidden')) openPanel();
+    else closePanel();
+  }
+
+  async function getWindowPosition() {
+    if (window.petAPI && window.petAPI.getWindowPosition) {
+      try { return await window.petAPI.getWindowPosition(); } catch (e) { return [0, 0]; }
+    }
+    return [0, 0];
+  }
+
+  function moveWindow(x, y) {
+    if (window.petAPI && window.petAPI.setWindowPosition) {
+      window.petAPI.setWindowPosition(x, y);
+    }
+  }
+
+  let petDrag = null;
+  let petDragMoved = false;
+
   function openPanel() {
     $('#panel').classList.remove('hidden');
-    setClickThrough(false);
+    setWindowMode('panel');
     setPet('summon', '我在呢！');
     setTimeout(() => {
       if (currentTab === 'query') $('#query-input').focus();
@@ -743,15 +764,8 @@
 
   function closePanel() {
     $('#panel').classList.add('hidden');
-    setClickThrough(true);
+    setWindowMode('pet');
     setPet('idle');
-  }
-
-  function isOverPet(x, y) {
-    const img = $('#pet-img');
-    if (!img) return false;
-    const r = img.getBoundingClientRect();
-    return x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
   }
 
   /* ---------------- 初始化 ---------------- */
@@ -761,21 +775,32 @@
       btn.addEventListener('click', () => switchTab(btn.dataset.tab));
     });
 
-    $('#pet-bar').addEventListener('click', () => {
-      if ($('#panel').classList.contains('hidden')) openPanel();
-      else closePanel();
+    // 桌宠：单击切换面板，拖动移动窗口（自定义拖拽）
+    $('#pet-bar').addEventListener('mousedown', async (e) => {
+      if (e.button !== 0) return;
+      const [wx, wy] = await getWindowPosition();
+      petDrag = { sx: e.screenX, sy: e.screenY, wx, wy };
+      petDragMoved = false;
+      e.preventDefault();
     });
 
-    // 面板隐藏时：只有鼠标在桌宠身上时窗口才接收点击，其余区域点击穿透
     document.addEventListener('mousemove', (e) => {
-      if (!$('#panel').classList.contains('hidden')) {
-        setClickThrough(false);
+      if (!petDrag) return;
+      if (!(e.buttons & 1)) {
+        petDrag = null;
         return;
       }
-      setClickThrough(!isOverPet(e.clientX, e.clientY));
+      const dx = e.screenX - petDrag.sx;
+      const dy = e.screenY - petDrag.sy;
+      if (Math.abs(dx) > 3 || Math.abs(dy) > 3) petDragMoved = true;
+      if (petDragMoved) moveWindow(petDrag.wx + dx, petDrag.wy + dy);
     });
-    document.addEventListener('mouseleave', () => {
-      if ($('#panel').classList.contains('hidden')) setClickThrough(true);
+
+    document.addEventListener('mouseup', () => {
+      if (!petDrag) return;
+      const moved = petDragMoved;
+      petDrag = null;
+      if (!moved) togglePanel();
     });
 
     $('#query-btn').addEventListener('click', handleQuery);
@@ -896,13 +921,12 @@
     migrateAndEnsureBooks();
     bindEvents();
     renderAll();
-    setClickThrough(true);
+    setWindowMode('pet');
 
     const auto = await getAutoLaunch();
     $('#setting-auto-launch').checked = auto;
 
-    setPet('summon', '早上好呀～ 我是你的单词桌宠');
-    setTimeout(() => setPet('idle'), 2600);
+    setPet('summon', '🔑 快捷键\nAlt+W 呼出\nAlt+E 隐藏\nAlt+P 显/隐桌宠', 8000);
 
     // 仅用于开发/自动测试
     window.__petDebug = {
@@ -913,7 +937,9 @@
         refreshReview();
       },
       currentBook: () => currentBook(),
-      createBook: createBook
+      createBook: createBook,
+      openPanel: openPanel,
+      closePanel: closePanel
     };
   }
 

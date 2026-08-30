@@ -26,6 +26,12 @@ const DEFAULT_DATA = {
 let win = null;
 let tray = null;
 let dataFile = null;
+let windowMode = 'panel';
+
+const PET_W = 250;
+const PET_H = 210;
+const PANEL_W = 470;
+const PANEL_H = 640;
 
 function getDataFile() {
   if (!dataFile) dataFile = path.join(app.getPath('userData'), 'word-pet-data.json');
@@ -88,6 +94,19 @@ function togglePet() {
     win.show();
     win.focus();
     win.webContents.send('pet-shown');
+  }
+}
+
+function setWindowMode(mode) {
+  if (!win || win.isDestroyed()) return;
+  if (mode === windowMode) return;
+  windowMode = mode;
+  if (mode === 'panel') {
+    const [x, y] = win.getPosition();
+    win.setBounds({ x: Math.round(x - (PANEL_W - PET_W) / 2), y, width: PANEL_W, height: PANEL_H });
+  } else {
+    const [x, y] = win.getPosition();
+    win.setBounds({ x: Math.round(x + (PANEL_W - PET_W) / 2), y, width: PET_W, height: PET_H });
   }
 }
 
@@ -187,9 +206,14 @@ function createWindow() {
     win.webContents.on('did-finish-load', () => {
       setTimeout(async () => {
         try {
+          // 先截宠物模式（含快捷键气泡），再展开面板
+          const petImage = await win.webContents.capturePage();
+          const petPath = outPath.replace(/\.png$/i, '-pet.png');
+          require('fs').writeFileSync(path.join(__dirname, petPath), petImage.toPNG());
+          console.log('SCREENSHOT_SAVED ' + petPath);
           await win.webContents.executeJavaScript(
             `(async () => {
-              document.querySelector('#panel').classList.remove('hidden');
+              window.__petDebug.openPanel();
               document.querySelector('.tab[data-tab="query"]').click();
               const input = document.querySelector('#query-input');
               input.value = 'abandon';
@@ -292,10 +316,18 @@ ipcMain.handle('window-hide', () => {
   return false;
 });
 
-ipcMain.handle('set-ignore-mouse', (event, ignore) => {
-  if (win && !win.isDestroyed()) {
-    win.setIgnoreMouseEvents(!!ignore, { forward: true });
-  }
+ipcMain.handle('set-window-mode', (event, mode) => {
+  setWindowMode(mode);
+  return true;
+});
+
+ipcMain.handle('get-window-position', () => {
+  if (win && !win.isDestroyed()) return win.getPosition();
+  return [0, 0];
+});
+
+ipcMain.handle('set-window-position', (event, x, y) => {
+  if (win && !win.isDestroyed()) win.setPosition(Math.round(x), Math.round(y));
   return true;
 });
 
