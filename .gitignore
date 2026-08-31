@@ -4,3 +4,6 @@ dist/
 .omo/
 *.log
 .DS_Store
+
+# 需求文档（内部文档，不上传）
+需求文档.md
