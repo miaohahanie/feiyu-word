@@ -14,6 +14,12 @@ contextBridge.exposeInMainWorld('petAPI', {
   setAutoLaunch: (enabled) => ipcRenderer.invoke('set-auto-launch', enabled),
   lookupOnline: (word) => ipcRenderer.invoke('lookup-online', word),
   translateText: (text) => ipcRenderer.invoke('translate-text', text),
+  getSyncStatus: () => ipcRenderer.invoke('sync-status'),
+  setSyncServer: (opts) => ipcRenderer.invoke('sync-server-set', opts),
+  refreshSyncCode: () => ipcRenderer.invoke('sync-refresh-code'),
+  removeSyncDevice: (deviceId) => ipcRenderer.invoke('sync-remove-device', deviceId),
+  recordWordDelete: (payload) => ipcRenderer.invoke('sync-record-delete', payload),
+  onSyncDataUpdated: (callback) => ipcRenderer.on('sync-data-updated', callback),
   onShortcut: (callback) => ipcRenderer.on('shortcut-summon', callback),
   onShortcutHide: (callback) => ipcRenderer.on('shortcut-hide-panel', callback),
   onPetShown: (callback) => ipcRenderer.on('pet-shown', callback)

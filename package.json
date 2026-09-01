@@ -31,6 +31,7 @@
       "main.js",
       "preload.js",
       "renderer/**/*",
+      "sync/**/*",
       "assets/**/*",
       "素材/**/*",
       "package.json",
@@ -72,5 +73,8 @@
     "electronDownload": {
       "mirror": "https://npmmirror.com/mirrors/electron/"
     }
+  },
+  "dependencies": {
+    "qrcode": "^1.5.4"
   }
 }

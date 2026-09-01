@@ -132,6 +132,7 @@
       examples: [],
       tags: ['六级'],
       createdAt: Date.now(),
+      updatedAt: Date.now(),
       mastered: false
     };
     Object.assign(w, window.Scheduler.newWordBase(Date.now() + (data.settings.firstReviewDelayMin || 60) * 60 * 1000));
@@ -183,6 +184,13 @@
         words: words
       });
     }
+
+    // 为旧数据补齐同步字段（updatedAt），否则增量同步无法识别变更
+    data.books.forEach((b) => {
+      (b.words || []).forEach((w) => {
+        if (typeof w.updatedAt !== 'number') w.updatedAt = Date.now();
+      });
+    });
 
     if (!data.settings.activeBookId || !data.books.some((b) => b.id === data.settings.activeBookId)) {
       data.settings.activeBookId = data.books[0].id;
@@ -386,6 +394,7 @@
         if (!hasSame) existing.examples.push(example);
       }
       existing._existed = true;
+      existing.updatedAt = Date.now();
       return existing;
     }
     const word = {
@@ -396,6 +405,7 @@
       examples: example ? [example] : [],
       tags: [],
       createdAt: Date.now(),
+      updatedAt: Date.now(),
       mastered: false,
       _existed: false
     };
@@ -483,6 +493,7 @@
   function gradeReview(rating) {
     if (!currentReview) return;
     window.Scheduler.rateWord(currentReview, rating);
+    currentReview.updatedAt = Date.now();
     window.Scheduler.updateDailyStats(data.stats, 'review', { reviewed: 1, rating });
     scheduleSave();
     setPet(
@@ -495,6 +506,7 @@
   function skipReview() {
     if (!currentReview) return;
     currentReview.nextReview = Date.now() + 30 * 60 * 1000;
+    currentReview.updatedAt = Date.now();
     scheduleSave();
     setTimeout(nextReview, 150);
   }
@@ -503,6 +515,7 @@
     if (!currentReview) return;
     currentReview.mastered = true;
     currentReview.nextReview = Date.now() + 30 * 24 * 60 * 60 * 1000;
+    currentReview.updatedAt = Date.now();
     scheduleSave();
     setPet('success', '这个词已经掌握啦～');
     setTimeout(nextReview, 150);
@@ -673,6 +686,7 @@
         w.examples[0].translation = trans;
       }
     }
+    w.updatedAt = Date.now();
     scheduleSave();
     closeEdit();
     renderWords();
@@ -764,6 +778,7 @@
       examples: ex ? [ex] : [],
       tags: [],
       createdAt: Date.now(),
+      updatedAt: Date.now(),
       mastered: false
     };
     Object.assign(w, window.Scheduler.newWordBase(Date.now() + (data.settings.firstReviewDelayMin || 60) * 60 * 1000));
@@ -1046,7 +1061,11 @@
       if (action === 'delete') {
         if (confirm('确定删除这个单词？（当前词汇本）')) {
           const book = currentBook();
+          const target = book.words.find((w) => w.id === id);
           book.words = book.words.filter((w) => w.id !== id);
+          if (target && window.petAPI && window.petAPI.recordWordDelete) {
+            window.petAPI.recordWordDelete({ bookId: book.id, word: target.word });
+          }
           scheduleSave();
           renderWords();
         }
@@ -1094,6 +1113,37 @@
     });
     $('#btn-seed').addEventListener('click', seedDemoWords);
 
+    const syncEnable = $('#setting-sync-enable');
+    const syncPort = $('#setting-sync-port');
+    if (syncEnable) {
+      syncEnable.addEventListener('change', async (e) => {
+        if (window.petAPI && window.petAPI.setSyncServer) {
+          await window.petAPI.setSyncServer({ enabled: e.target.checked, port: Number(syncPort && syncPort.value) || 8787 });
+        }
+        refreshSyncStatus();
+      });
+    }
+    if (syncPort) {
+      syncPort.addEventListener('change', async () => {
+        if (syncEnable && syncEnable.checked && window.petAPI && window.petAPI.setSyncServer) {
+          await window.petAPI.setSyncServer({ enabled: true, port: Number(syncPort.value) || 8787 });
+        }
+        refreshSyncStatus();
+      });
+    }
+    $('#btn-sync-refresh').addEventListener('click', async () => {
+      if (window.petAPI && window.petAPI.refreshSyncCode) await window.petAPI.refreshSyncCode();
+      refreshSyncStatus();
+    });
+    $('#sync-devices').addEventListener('click', async (e) => {
+      const btn = e.target.closest('[data-device-remove]');
+      if (!btn) return;
+      if (window.petAPI && window.petAPI.removeSyncDevice) {
+        await window.petAPI.removeSyncDevice(btn.dataset.deviceRemove);
+      }
+      refreshSyncStatus();
+    });
+
     if (window.petAPI && window.petAPI.onShortcut) {
       window.petAPI.onShortcut(() => openPanel());
     }
@@ -1111,6 +1161,73 @@
         setPet('idle');
       }
     }, 25000);
+  }
+
+  function formatTime(ts) {
+    if (!ts) return '从未';
+    const d = new Date(Number(ts));
+    return d.toLocaleString('zh-CN', {
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  }
+
+  async function refreshSyncStatus() {
+    if (!window.petAPI || !window.petAPI.getSyncStatus) return;
+    try {
+      renderSyncStatus(await window.petAPI.getSyncStatus());
+    } catch (e) {
+      /* ignore */
+    }
+  }
+
+  function renderSyncStatus(st) {
+    if (!st) return;
+    const enable = $('#setting-sync-enable');
+    const port = $('#setting-sync-port');
+    if (enable) enable.checked = !!st.enabled;
+    if (port) port.value = st.port || 8787;
+    const statusEl = $('#sync-status');
+    if (statusEl) {
+      if (st.enabled) {
+        const ipText = st.ip || (st.ips && st.ips[0]) || '检测中…';
+        statusEl.textContent = '服务已开启：' + ipText + ':' + st.port +
+          (st.error ? '（错误：' + st.error + '）' : '');
+      } else {
+        statusEl.textContent = st.error ? '服务失败：' + st.error : '同步服务未开启';
+      }
+    }
+    const qrRow = $('#sync-qr-row');
+    const qr = $('#sync-qr');
+    if (qrRow && qr) {
+      if (st.enabled && st.qr) {
+        qr.src = st.qr;
+        qrRow.classList.remove('hidden');
+      } else {
+        qrRow.classList.add('hidden');
+      }
+    }
+    const codeEl = $('#sync-code');
+    if (codeEl) codeEl.textContent = st.pairingCode || '';
+    const devBox = $('#sync-devices');
+    if (devBox) {
+      const devices = st.devices || [];
+      if (!devices.length) {
+        devBox.innerHTML = '<div class="muted">暂无已配对设备</div>';
+      } else {
+        devBox.innerHTML =
+          '<div class="muted">已配对设备：</div>' +
+          devices.map(
+            (d) =>
+              '<div class="sync-device-row">' +
+              '<span>' + escapeHtml(d.name || 'Android 手机') + ' · ' + escapeHtml(formatTime(d.lastSyncAt)) + ' 同步</span>' +
+              '<button class="neo-btn" data-device-remove="' + escapeHtml(d.deviceId) + '">移除</button>' +
+              '</div>'
+          ).join('');
+      }
+    }
   }
 
   function renderAll() {
@@ -1132,6 +1249,14 @@
     migrateAndEnsureBooks();
     bindEvents();
     renderAll();
+    refreshSyncStatus();
+    if (window.petAPI && window.petAPI.onSyncDataUpdated) {
+      window.petAPI.onSyncDataUpdated(async () => {
+        data = await loadData();
+        renderAll();
+        refreshSyncStatus();
+      });
+    }
     setWindowMode('pet');
 
     const auto = await getAutoLaunch();

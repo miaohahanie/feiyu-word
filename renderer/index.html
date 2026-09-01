@@ -161,6 +161,29 @@
               <button id="btn-seed" class="neo-btn">导入示例词</button>
             </div>
           </div>
+
+          <div class="card">
+            <h2>📱 手机同步（M1）</h2>
+            <div class="setting-row">
+              <label class="check-row">
+                <input id="setting-sync-enable" type="checkbox" />
+                开启局域网同步服务
+              </label>
+            </div>
+            <div class="setting-row">
+              <span>服务端口</span>
+              <input id="setting-sync-port" class="neo-input small" type="number" min="1024" max="65535" value="8787" />
+            </div>
+            <div id="sync-status" class="muted">同步服务未开启</div>
+            <div id="sync-qr-row" class="sync-qr-row hidden">
+              <img id="sync-qr" class="sync-qr" alt="手机扫码配对" />
+              <div>
+                <div class="muted">配对码：<span id="sync-code" class="kbd"></span></div>
+                <button id="btn-sync-refresh" class="neo-btn">刷新配对码</button>
+              </div>
+            </div>
+            <div id="sync-devices" class="sync-devices"></div>
+          </div>
         </section>
       </main>
     </div>

@@ -280,6 +280,35 @@ h3 {
   margin: 0 0 10px;
 }
 
+.sync-qr-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-top: 8px;
+}
+
+.sync-qr {
+  width: 160px;
+  height: 160px;
+  border: var(--border);
+  background: #fff;
+  image-rendering: pixelated;
+}
+
+.sync-devices {
+  margin-top: 8px;
+  font-size: 12px;
+}
+
+.sync-device-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 2px dashed #ccc;
+}
+
 .kbd {
   border: 2px solid var(--ink);
   background: var(--yellow);

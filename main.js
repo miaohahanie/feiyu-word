@@ -11,6 +11,8 @@ const {
 } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const { createSyncStore } = require('./sync/sync-store');
+const { createSyncServer } = require('./sync/sync-server');
 
 const DEFAULT_DATA = {
   books: [],
@@ -30,6 +32,8 @@ let windowMode = 'panel';
 // 拖动期间固定的窗口尺寸：Windows 透明无边框窗在 setPosition 时会把尺寸带偏（electron#10862），
 // 导致拖动时面板被异常拉伸。这里在拖动开始时记住尺寸，移动时用 setBounds 固定尺寸，避免漂移。
 let dragBounds = null;
+let syncStore = null;
+let syncServer = null;
 
 const PET_W = 250;
 const PET_H = 210;
@@ -78,6 +82,28 @@ function saveData(data) {
     return true;
   } catch (e) {
     return false;
+  }
+}
+
+function initSync() {
+  if (syncStore) return;
+  syncStore = createSyncStore(path.join(app.getPath('userData'), 'word-pet-sync.json'));
+  syncServer = createSyncServer({
+    store: syncStore,
+    getData: () => loadData(),
+    saveData: (data) => saveData(data),
+    notifyDataChanged: () => {
+      try {
+        if (win && !win.isDestroyed()) win.webContents.send('sync-data-updated');
+      } catch (e) {
+        /* ignore */
+      }
+    }
+  });
+  if (syncStore.getServerConfig().enabled) {
+    syncServer.start().catch(() => {
+      /* 启动失败时在设置页展示 error */ 
+    });
   }
 }
 
@@ -323,6 +349,7 @@ function registerShortcuts() {
 }
 
 app.whenReady().then(() => {
+  initSync();
   createWindow();
   createTray();
   registerShortcuts();
@@ -334,6 +361,7 @@ app.whenReady().then(() => {
 
 app.on('will-quit', () => {
   globalShortcut.unregisterAll();
+  if (syncServer) syncServer.stop().catch(() => {});
 });
 
 app.on('window-all-closed', () => {
@@ -551,4 +579,47 @@ ipcMain.handle('translate-text', async (event, text) => {
   } catch (e) {
     return null;
   }
+});
+
+/* ---------------- 手机同步（M1） ---------------- */
+
+async function syncStatusOrNull() {
+  if (!syncServer) return { enabled: false, port: 0, ip: '', ips: [], pairingCode: '', qr: null, devices: [], error: '同步服务未初始化' };
+  try {
+    return await syncServer.getStatus();
+  } catch (e) {
+    return { enabled: false, port: 0, ip: '', ips: [], pairingCode: '', qr: null, devices: [], error: String((e && e.message) || e) };
+  }
+}
+
+ipcMain.handle('sync-status', async () => syncStatusOrNull());
+
+ipcMain.handle('sync-server-set', async (event, opts) => {
+  if (!syncServer) return null;
+  try {
+    if (opts && opts.enabled) {
+      return await syncServer.start(opts.port);
+    }
+    return await syncServer.stop();
+  } catch (e) {
+    const status = await syncStatusOrNull();
+    status.error = String((e && e.message) || e);
+    return status;
+  }
+});
+
+ipcMain.handle('sync-refresh-code', async () => {
+  if (!syncStore) return null;
+  syncStore.genCode();
+  return syncStatusOrNull();
+});
+
+ipcMain.handle('sync-remove-device', async (event, deviceId) => {
+  if (syncStore && deviceId) syncStore.removeDevice(String(deviceId));
+  return syncStatusOrNull();
+});
+
+ipcMain.handle('sync-record-delete', async (event, payload) => {
+  if (syncStore && payload) syncStore.addTombstone(payload.bookId, payload.word);
+  return true;
 });
