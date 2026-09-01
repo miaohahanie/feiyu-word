@@ -276,6 +276,10 @@ h3 {
   cursor: pointer;
 }
 
+.import-enrich-row {
+  margin: 0 0 10px;
+}
+
 .kbd {
   border: 2px solid var(--ink);
   background: var(--yellow);

@@ -1,6 +1,6 @@
 {
   "name": "word-pet",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "六级词汇记忆桌宠：阅读驱动查词 + FSRS 自适应复习",
   "main": "main.js",
   "scripts": {

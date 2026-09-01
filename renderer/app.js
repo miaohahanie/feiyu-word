@@ -109,6 +109,7 @@
     cache: '本地缓存',
     book: '已有词汇本',
     youdao: '在线 · 有道',
+    'youdao-ee': '在线 · 有道英文释义',
     mymemory: '在线 · 翻译',
     dictionaryapi: '在线 · 英文释义'
   };
@@ -681,6 +682,48 @@
     download(book.name + '.csv', csv, 'text/csv;charset=utf-8');
   }
 
+  /* 释义足够丰富就无需补全（含多义分隔或较长说明） */
+  function isThinMeaning(m) {
+    const s = String(m || '').trim();
+    if (!s) return true;
+    if (s.includes('；') || s.includes(';')) return false;
+    return s.length < 16;
+  }
+
+  /* 导入后补全释义：离线词典优先（快），缺词再联网查（并发 4） */
+  async function enrichImportedWords(words) {
+    let updated = 0;
+    let i = 0;
+    const CONCURRENCY = 4;
+    async function worker() {
+      while (i < words.length) {
+        const w = words[i++];
+        if (!w || !w.word) continue;
+        const key = String(w.word).toLowerCase();
+        const local = window.Dictionary.lookupWord(key);
+        if (local && local.source === 'offline' && local.meaning && isThinMeaning(w.meaning)) {
+          w.meaning = local.meaning;
+          w.phonetic = local.phonetic || w.phonetic;
+          updated++;
+          continue;
+        }
+        if (isThinMeaning(w.meaning)) {
+          const online = await onlineLookup(key);
+          if (online && online.meaning && String(online.meaning).length > String(w.meaning).length) {
+            w.meaning = online.meaning;
+            w.phonetic = online.phonetic || w.phonetic;
+            window.Dictionary.cacheWord(key, online);
+            updated++;
+          }
+        }
+      }
+    }
+    const workers = [];
+    for (let n = 0; n < Math.min(CONCURRENCY, words.length); n++) workers.push(worker());
+    await Promise.all(workers);
+    return updated;
+  }
+
   function addImported(word, meaning, example, translation) {
     const key = String(word).toLowerCase().trim();
     if (!key || !meaning) return false;
@@ -701,7 +744,7 @@
     Object.assign(w, window.Scheduler.newWordBase(Date.now() + (data.settings.firstReviewDelayMin || 60) * 60 * 1000));
     words.unshift(w);
     window.Scheduler.updateDailyStats(data.stats, 'add', { added: 1 });
-    return true;
+    return w;
   }
 
   async function handleImportFile(e) {
@@ -747,17 +790,32 @@
         if (items.length && String(items[0].word).toLowerCase() === 'word') items.shift();
       }
       let added = 0;
+      const addedWords = [];
       items.forEach((it) => {
         const word = (it.word || it[0] || '').split(';')[0] || '';
         const meaning = (it.meaning || it[1] || '').trim();
         const example = (it.example || it[2] || '').trim();
         const translation = (it.example_translation || it.translation || it[3] || '').trim();
-        if (addImported(word, meaning, example, translation)) added += 1;
+        const w = addImported(word, meaning, example, translation);
+        if (w) {
+          added += 1;
+          addedWords.push(w);
+        }
       });
+      let enriched = 0;
+      const enrichChecked = $('#import-enrich') && $('#import-enrich').checked;
+      if (addedWords.length && enrichChecked) {
+        setPet('recording', '正在补全导入词释义…');
+        enriched = await enrichImportedWords(addedWords);
+      }
       if (added > 0) {
         scheduleSave();
         renderWords();
-        alert('导入成功，新增 ' + added + ' 个单词（当前词汇本：' + currentBook().name + '）。');
+        alert(
+          '导入成功，新增 ' + added + ' 个单词' +
+          (enriched ? '，离线/在线补全释义 ' + enriched + ' 个' : '') +
+          '（当前词汇本：' + currentBook().name + '）。'
+        );
       } else {
         alert('没有导入新单词（可能都已存在或格式不识别）。');
       }

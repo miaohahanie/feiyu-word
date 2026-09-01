@@ -205,7 +205,7 @@ const DICT_INDEX = {};
 /* 本地查询缓存：在线查过的词存到这里，之后完全离线也能查出 */
 let DICT_CACHE = {};
 try {
-  DICT_CACHE = JSON.parse(localStorage.getItem('word-pet-dict-cache') || '{}');
+  DICT_CACHE = JSON.parse(localStorage.getItem('word-pet-dict-cache-v2') || '{}');
 } catch (e) {
   DICT_CACHE = {};
 }
@@ -218,7 +218,7 @@ function cacheWord(word, info) {
     phonetic: String(info.phonetic || '')
   };
   try {
-    localStorage.setItem('word-pet-dict-cache', JSON.stringify(DICT_CACHE));
+    localStorage.setItem('word-pet-dict-cache-v2', JSON.stringify(DICT_CACHE));
   } catch (e) {
     /* ignore */
   }

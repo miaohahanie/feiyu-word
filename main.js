@@ -413,11 +413,54 @@ function fetchWithTimeout(url, ms = 8000) {
   return net.fetch(url, { signal: controller.signal }).finally(() => clearTimeout(timer));
 }
 
+/* 解析有道 jsonapi 新版中文释义（ec 结构） */
+function youdaoEcMeanings(ec) {
+  const out = [];
+  if (!ec || !Array.isArray(ec.word)) return out;
+  for (const w of ec.word) {
+    const trs = Array.isArray(w.trs) ? w.trs : [];
+    for (const t of trs) {
+      const items = Array.isArray(t.tr) ? t.tr : [];
+      for (const item of items) {
+        const l = item && item.l;
+        const lines = Array.isArray(l && l.i) ? l.i : [];
+        for (const s of lines) {
+          if (s && !/^【名】.*（人名）/.test(s)) out.push(String(s).trim());
+        }
+      }
+    }
+  }
+  return [...new Set(out)];
+}
+
+/* 有道 jsonapi 英文释义兜底（ee 结构，WordNet） */
+function youdaoEeMeanings(ee) {
+  const out = [];
+  if (!ee || !ee.word || !Array.isArray(ee.word.trs)) return out;
+  for (const t of ee.word.trs) {
+    const pos = t.pos || '';
+    const tr = Array.isArray(t.tr) ? t.tr : [];
+    for (const item of tr) {
+      const i = item && item.l && item.l.i;
+      if (i) out.push((pos ? pos + ' ' : '') + String(i));
+    }
+  }
+  return [...new Set(out)];
+}
+
+/* 机器翻译只有当结果确实翻译成了中文、且不是原词时才可信 */
+function looksLikeChineseTranslation(text, word) {
+  const t = String(text || '').trim();
+  if (!t || !/[\u4e00-\u9fa5]/.test(t)) return false;
+  const norm = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  return norm(t) !== norm(word) && t.toLowerCase() !== word.toLowerCase();
+}
+
 ipcMain.handle('lookup-online', async (event, word) => {
   const q = String(word || '').trim();
   if (!q || !/^[a-zA-Z][a-zA-Z\-' ]*$/.test(q)) return null;
 
-  // 1) 有道词典（中文释义 + 音标）
+  // 1) 有道词典（中文释义 + 音标；新版接口返回 ec/simple 结构）
   try {
     const res = await fetchWithTimeout('https://dict.youdao.com/jsonapi?q=' + encodeURIComponent(q));
     if (res.ok) {
@@ -425,20 +468,30 @@ ipcMain.handle('lookup-online', async (event, word) => {
       const basic = data.basic || {};
       const explains = Array.isArray(basic.explains) ? basic.explains : [];
       const translation = Array.isArray(data.translation) ? data.translation : [];
-      const phonetic = basic['us-phonetic'] || basic['uk-phonetic'] || basic.phonetic || '';
-      if (explains.length || translation.length) {
+      const ecMeanings = youdaoEcMeanings(data.ec);
+      const meanings = ecMeanings.concat(explains, translation).filter(Boolean);
+      const simpleWord = data.simple && data.simple.word && data.simple.word[0];
+      const phonetic =
+        (simpleWord && (simpleWord.usphone || simpleWord.ukphone)) ||
+        basic['us-phonetic'] || basic['uk-phonetic'] || basic.phonetic || '';
+      if (meanings.length) {
         return {
           phonetic,
-          meaning: explains.join('；') || translation.join('；'),
+          meaning: meanings.join('；'),
           source: 'youdao'
         };
+      }
+      // 没有中文释义时，退回英文释义（WordNet）也远好于机器翻译乱译
+      const eeMeanings = youdaoEeMeanings(data.ee);
+      if (eeMeanings.length) {
+        return { phonetic, meaning: eeMeanings.join('；'), source: 'youdao-ee' };
       }
     }
   } catch (e) {
     /* 尝试下一个源 */
   }
 
-  // 2) MyMemory 整词翻译（英 → 中）
+  // 2) MyMemory 整词翻译（英 → 中）：只接受真正翻译成中文、且不是原词的文本
   try {
     const m = await fetchWithTimeout(
       'https://api.mymemory.translated.net/get?q=' + encodeURIComponent(q) + '&langpair=en|zh-CN'
@@ -446,7 +499,7 @@ ipcMain.handle('lookup-online', async (event, word) => {
     if (m.ok) {
       const data = await m.json();
       const translated = data && data.responseData && data.responseData.translatedText;
-      if (translated && translated.toLowerCase() !== q.toLowerCase()) {
+      if (looksLikeChineseTranslation(translated, q)) {
         return { phonetic: '', meaning: translated, source: 'mymemory' };
       }
     }
