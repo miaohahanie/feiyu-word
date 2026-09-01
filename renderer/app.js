@@ -538,6 +538,31 @@
     $('#book-modal').classList.add('hidden');
   }
 
+  function openLicenseModal() {
+    const text = [
+      '单词桌宠 · 非商业同人/学习作品',
+      '',
+      '代码许可：MIT License（LICENSE-CODE）',
+      '素材许可：CC BY-NC-SA 4.0（LICENSE-ASSETS）',
+      '第三方归属与数据说明：NOTICE',
+      '',
+      '素材版权归属：',
+      '· 原创角色「鲸鱼娘\'溟月\'」 © @上善无形（B站）',
+      '· 女仆鲸鱼娘（DS鲸鱼娘）二创形象 © @ZipZipPipe（B站）',
+      '· 「蓝色大肥鱼」表情包 © @赤风RED LUE UP（B站）',
+      '',
+      '素材仅限非商业用途；二次分发须署名，并按相同协议',
+      '（CC BY-NC-SA 4.0）授权。本项目与上述原作者无隶属关系。',
+      '完整许可文本与来源见：LICENSE / LICENSE-CODE / LICENSE-ASSETS / NOTICE。'
+    ].join('\n');
+    $('#license-content').textContent = text;
+    $('#license-modal').classList.remove('hidden');
+  }
+
+  function closeLicenseModal() {
+    $('#license-modal').classList.add('hidden');
+  }
+
   function createBook() {
     const name = $('#book-name').value.trim();
     if (!name) {
@@ -1036,6 +1061,12 @@
     $('#edit-cancel').addEventListener('click', closeEdit);
     $('#edit-modal').addEventListener('click', (e) => {
       if (e.target === e.currentTarget) closeEdit();
+    });
+
+    $('#btn-license').addEventListener('click', openLicenseModal);
+    $('#license-close').addEventListener('click', closeLicenseModal);
+    $('#license-modal').addEventListener('click', (e) => {
+      if (e.target === e.currentTarget) closeLicenseModal();
     });
 
     $('#setting-quota').addEventListener('change', (e) => {

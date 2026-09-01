@@ -1,0 +1,94 @@
+# NOTICE —— 第三方内容、素材与数据来源
+
+> 本文件用于声明本项目中的第三方内容、素材、数据与软件许可。
+> 分发本项目（包括源码仓库与打包产物）时请保留本文件。
+>
+> 说明：本 NOTICE 是再分发者对授权状态的**声明与署名**，不是新授予的许可；
+> 素材的著作权与许可权仍归原作者所有，具体权利人以原作者的授权声明为准。
+
+---
+
+## 1. 源代码
+
+- 本项目源代码采用 **MIT License**，详见 `LICENSE-CODE`。
+- Copyright (c) 2026 Word Pet Project
+- 应用图标与托盘图标（`assets/icon.png`、`assets/icon.ico`、`assets/tray-icon.png`）
+  由 `scripts/make-icon.js`、`scripts/make-tray-icon.js` 程序化生成，属于源代码（MIT）范围。
+
+---
+
+## 2. 美术/表情包素材（`素材/` 目录）
+
+- 许可：**Attribution-NonCommercial-ShareAlike 4.0 International (CC BY-NC-SA 4.0)**，
+  完整文本见 `LICENSE-ASSETS`。
+- 使用条件：分享、改编须**署名**、**非商业用途**、**相同协议（SA）再发布**，且不得附加额外限制。
+
+### 版权归属
+
+| 创作阶段 | 作者 | 出处 |
+| --- | --- | --- |
+| 原创角色「鲸鱼娘'溟月'」 | [@上善无形](https://space.bilibili.com/4456176) | [B站空间](https://space.bilibili.com/4456176) |
+| 女仆鲸鱼娘（DS鲸鱼娘）二创形象 | [@ZipZipPipe](https://space.bilibili.com/4168597) | [B站空间](https://space.bilibili.com/4168597) |
+| 「蓝色大肥鱼」表情包 | [@赤风RED LUE UP](https://space.bilibili.com/356746604) | [B站空间](https://space.bilibili.com/356746604) |
+
+### 素材文件清单
+
+```
+素材/主人加油呀~.gif
+素材/主人好厉害！.gif
+素材/休息ing.gif
+素材/别太紧张啦~.gif
+素材/加班(〃＞目＜).gif
+素材/在帮主人记录ing.gif
+素材/小手机真好玩.gif
+素材/工作ing.gif
+素材/工作做晕了.gif
+素材/工作越多越应该绅士.gif
+素材/思考ing.gif
+素材/抛媚眼~.gif
+素材/早上好呀.gif
+素材/早上工作喵~.gif
+素材/最喜欢主人了~.gif
+素材/生日快乐.gif
+素材/突然出现~.gif
+素材/该吃饭了.gif
+素材/顺利完成~.gif
+素材/鬼点子发动中.gif
+```
+
+---
+
+## 3. 词典数据与在线查词
+
+### 内置离线词典（随仓库分发）
+
+- `renderer/dict-data.js`、`renderer/cet4-data.js`、`renderer/cet6-data.js` 中的
+  离线词条与释义源自 **cet-words-cli 0.3.1**（MIT License），
+  生成脚本见 `scripts/build-dict.js`、`scripts/build-cet4.js`、`scripts/build-cet6.js`。
+- 数据仅用于 CET-4 / CET-6 学习用途。
+
+### 在线查词接口（不在仓库内分发数据，运行时由用户主动请求）
+
+| 接口 | 性质 | 说明 |
+| --- | --- | --- |
+| 有道词典 `dict.youdao.com/jsonapi` | 非官方 jsonapi 接口 | 返回内容版权归有道/相关权利人；接口可能随时变更或不可用，仅供学习 |
+| MyMemory `api.mymemory.translated.net` | 免费翻译 API | 有配额与服务条款，通常要求标注来源；详见其官方使用限制说明 |
+| Free Dictionary API `api.dictionaryapi.dev` | 免费词典 API | 数据源为 Wiktionary 等，各自遵循相应版权许可 |
+
+- 本项目只缓存用户主动查询过的少量结果到本机 `localStorage`，**不随仓库或安装包分发**在线词典数据。
+- 在线接口的可用性、准确性与持久性不作任何承诺。
+
+---
+
+## 4. 第三方软件依赖
+
+- 运行时与打包依赖（Electron、electron-builder 等）遵循各自开源许可证，
+  详见 `package.json` 与 `package-lock.json`。
+
+---
+
+## 5. 非商业声明与移除政策
+
+- 本项目为**非商业的同人/学习性质作品**，与上述原作者无隶属关系。
+- 若任一素材权利人提出移除要求，本项目将及时处理；fork 与二次分发者请自行遵守
+  原作者许可条件（署名、非商业、相同协议）。

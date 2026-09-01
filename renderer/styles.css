@@ -618,3 +618,22 @@ h3 {
 .modal .neo-textarea {
   margin-bottom: 4px;
 }
+
+.license-modal {
+  width: 430px;
+}
+
+.license-content {
+  max-height: 320px;
+  overflow-y: auto;
+  background: #fff;
+  border: var(--border);
+  box-shadow: var(--shadow-sm);
+  padding: 10px;
+  font-size: 12px;
+  font-weight: normal;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-all;
+  user-select: text;
+}

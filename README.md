@@ -47,8 +47,8 @@ npm run dist
 
 产物在 `dist/` 目录：
 
-- `单词桌宠-0.3.1-Setup.exe` —— 安装版（NSIS，可选择安装目录）
-- `单词桌宠-0.3.1-Portable.exe` —— 绿色便携版，双击即用
+- `单词桌宠-0.3.2-Setup.exe` —— 安装版（NSIS，可选择安装目录）
+- `单词桌宠-0.3.2-Portable.exe` —— 绿色便携版，双击即用
 
 > 已配置 electron-builder（NSIS + Portable），应用图标为 `assets/icon.ico`；`dist/` 已在 `.gitignore` 中忽略，不会提交到 git。
 
@@ -73,6 +73,10 @@ npm run dist
 单词桌宠/
 ├── main.js               # Electron 主进程：窗口/托盘/快捷键/自启动/剪贴板/在线查词/翻译
 ├── preload.js            # 安全桥接（contextBridge）
+├── LICENSE               # 双许可总括声明
+├── LICENSE-CODE          # 代码 MIT 许可
+├── LICENSE-ASSETS        # 素材 CC BY-NC-SA 4.0 许可
+├── NOTICE                # 第三方归属/许可/数据来源声明
 ├── assets/
 │   ├── tray-icon.png     # 托盘图标
 │   ├── icon.png          # 应用图标（256x256）
@@ -100,6 +104,7 @@ npm run dist
 
 - 数据保存在 Electron 用户数据目录：`%APPDATA%/word-pet/word-pet-data.json`。
 - 可在"设置"里导入示例词；"单词本 → 导出"可备份（CSV 带 BOM，Excel 可直接打开）。
+- 在线查词仅在用户主动查询时，把查询词发送给有道 / MyMemory / Free Dictionary API 等第三方服务；本项目不上传词库，也不收集任何账户信息。接口数据版权归原站，详见 [NOTICE](NOTICE)。
 
 ## 后续规划
 
@@ -110,12 +115,14 @@ npm run dist
 
 ## 📄 许可声明（双许可）
 
-本项目采用「代码 / 素材」分离的双许可模式：
+本项目采用「代码 / 素材」分离的双许可模式，总括说明见 [LICENSE](LICENSE)，第三方归属与数据说明见 [NOTICE](NOTICE)：
 
 | 范围 | 许可证 |
 | --- | --- |
-| 源代码（`main.js`、`preload.js`、`renderer/` 等全部代码与配置文件） | [MIT](LICENSE-CODE) |
+| 源代码（`main.js`、`preload.js`、`renderer/`、`scripts/` 等全部代码与配置文件，及脚本生成的应用/托盘图标） | [MIT](LICENSE-CODE) |
 | 表情包素材（`素材/` 内全部 GIF 动画） | [CC BY-NC-SA 4.0](LICENSE-ASSETS) |
+
+> 打包产物（`dist/*.exe`）会包含 `LICENSE`、`LICENSE-CODE`、`LICENSE-ASSETS`、`NOTICE` 与 `README.md`。
 
 ### 素材版权与署名
 
@@ -125,6 +132,6 @@ npm run dist
 - **「女仆鲸鱼娘（DS鲸鱼娘）」二创形象**：© [@ZipZipPipe](https://space.bilibili.com/4168597)（B站）
 - **「蓝色大肥鱼」表情包**：© [@赤风RED LUE UP](https://space.bilibili.com/356746604)（B站）
 
-以上所有素材均采用 **[CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/deed.zh)** 协议授权：可自由分享与改编，但**不得用于商业用途**；二次分发或演绎时须以相同协议授权，并完整保留上述署名信息。
+以上素材的著作权与许可权归原作者所有，原作者以 **[CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/deed.zh)** 协议授权：可自由分享与改编，但**不得用于商业用途**；二次分发或演绎时须以相同协议授权，并完整保留上述署名信息。
 
-> 本项目为非商业的同人性质作品，与上述原作者无隶属关系。如版权方提出要求，本项目将及时移除相关素材。
+> 本项目为非商业的同人/学习性质作品，与上述原作者无隶属关系。如版权方提出要求，本项目将及时移除相关素材。

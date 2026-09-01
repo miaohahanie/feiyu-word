@@ -152,6 +152,10 @@
               <span>离线词库词数</span>
               <span id="setting-dict-count" class="kbd"></span>
             </div>
+            <div class="setting-row">
+              <span>关于与许可</span>
+              <button id="btn-license" class="neo-btn">查看</button>
+            </div>
             <div class="btn-row">
               <button id="btn-reset" class="neo-btn danger">清空当前词汇本</button>
               <button id="btn-seed" class="neo-btn">导入示例词</button>
@@ -190,6 +194,17 @@
       <div class="btn-row">
         <button id="edit-save" class="neo-btn primary">保存</button>
         <button id="edit-cancel" class="neo-btn">取消</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 许可信息弹窗 -->
+  <div id="license-modal" class="modal-overlay hidden">
+    <div class="modal license-modal">
+      <h3>📜 关于与许可</h3>
+      <div id="license-content" class="license-content"></div>
+      <div class="btn-row">
+        <button id="license-close" class="neo-btn">关闭</button>
       </div>
     </div>
   </div>

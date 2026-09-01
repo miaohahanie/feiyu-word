@@ -1,0 +1,13 @@
+# 双许可声明
+
+本项目采用「代码 / 素材」分离的双许可模式：
+
+| 范围 | 许可证 | 文件 |
+| --- | --- | --- |
+| 源代码（main.js、preload.js、renderer/、scripts/、配置文件，以及由脚本程序化生成的应用/托盘图标） | MIT License | [LICENSE-CODE](LICENSE-CODE) |
+| 美术/表情包素材（「素材/」目录下全部 GIF） | CC BY-NC-SA 4.0（Attribution-NonCommercial-ShareAlike 4.0 International） | [LICENSE-ASSETS](LICENSE-ASSETS) |
+
+第三方内容与数据（离线词典数据、在线查词接口返回内容、Electron 等依赖）遵循各自许可证，
+完整归属与许可说明见 [NOTICE](NOTICE)。
+
+使用、分发或 fork 本仓库时，请一并保留本声明、上述两份许可证文本、NOTICE 以及原始署名信息。
