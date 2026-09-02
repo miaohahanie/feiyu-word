@@ -13,7 +13,8 @@ const DEFAULT_CONFIG = {
     enabled: false,
     port: 8787,
     pairingCode: '',
-    codeExpiresAt: 0
+    codeExpiresAt: 0,
+    selectedIp: ''
   },
   devices: [],
   tombstones: []
@@ -145,6 +146,12 @@ function createSyncStore(filePath) {
     return p;
   }
 
+  function setSelectedIp(ip) {
+    config.server.selectedIp = String(ip || '').trim();
+    save();
+    return config.server.selectedIp;
+  }
+
   return {
     genCode,
     ensureCode,
@@ -158,6 +165,7 @@ function createSyncStore(filePath) {
     getServerConfig,
     setServerEnabled,
     setPort,
+    setSelectedIp,
     getFilePath: () => filePath
   };
 }

@@ -1131,6 +1131,15 @@
         refreshSyncStatus();
       });
     }
+    const syncNetwork = $('#sync-network-select');
+    if (syncNetwork) {
+      syncNetwork.addEventListener('change', async () => {
+        if (window.petAPI && window.petAPI.selectSyncIp) {
+          await window.petAPI.selectSyncIp(syncNetwork.value);
+        }
+        refreshSyncStatus();
+      });
+    }
     $('#btn-sync-refresh').addEventListener('click', async () => {
       if (window.petAPI && window.petAPI.refreshSyncCode) await window.petAPI.refreshSyncCode();
       refreshSyncStatus();
@@ -1190,9 +1199,22 @@
     if (enable) enable.checked = !!st.enabled;
     if (port) port.value = st.port || 8787;
     const statusEl = $('#sync-status');
+    const networkSel = $('#sync-network-select');
+    if (networkSel && st.networks) {
+      networkSel.innerHTML =
+        st.networks.map(
+          (n) =>
+            '<option value="' + escapeHtml(n.address) + '">' +
+            escapeHtml(n.name) + '（' + escapeHtml(n.address) + '）</option>'
+        ).join('') || '<option value="">未检测到网卡</option>';
+      if (st.selectedIp) networkSel.value = st.selectedIp;
+    }
     if (statusEl) {
       if (st.enabled) {
-        const ipText = st.ip || (st.ips && st.ips[0]) || '检测中…';
+        const selNet = (st.networks || []).find((n) => n.address === st.ip);
+        const ipText = selNet
+          ? selNet.name + ' ' + st.ip
+          : st.ip || (st.ips && st.ips[0]) || '检测中…';
         statusEl.textContent = '服务已开启：' + ipText + ':' + st.port +
           (st.error ? '（错误：' + st.error + '）' : '');
       } else {

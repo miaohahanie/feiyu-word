@@ -614,6 +614,15 @@ ipcMain.handle('sync-refresh-code', async () => {
   return syncStatusOrNull();
 });
 
+ipcMain.handle('sync-select-ip', async (event, ip) => {
+  if (!syncServer) return null;
+  try {
+    return await syncServer.setPreferredIp(ip);
+  } catch (e) {
+    return syncStatusOrNull();
+  }
+});
+
 ipcMain.handle('sync-remove-device', async (event, deviceId) => {
   if (syncStore && deviceId) syncStore.removeDevice(String(deviceId));
   return syncStatusOrNull();

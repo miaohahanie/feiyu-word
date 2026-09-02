@@ -47,8 +47,8 @@ npm run dist
 
 产物在 `dist/` 目录：
 
-- `单词桌宠-0.3.2-Setup.exe` —— 安装版（NSIS，可选择安装目录）
-- `单词桌宠-0.3.2-Portable.exe` —— 绿色便携版，双击即用
+- `单词桌宠-0.3.3-Setup.exe` —— 安装版（NSIS，可选择安装目录）
+- `单词桌宠-0.3.3-Portable.exe` —— 绿色便携版，双击即用
 
 > 已配置 electron-builder（NSIS + Portable），应用图标为 `assets/icon.ico`；`dist/` 已在 `.gitignore` 中忽略，不会提交到 git。
 

@@ -11,15 +11,50 @@ const crypto = require('crypto');
 const { rateWord } = require('./scheduler');
 const { buildPairUrl, makePairQrDataUrl } = require('./qr');
 
-function getLanIPs() {
+const VPN_NAME_PATTERNS = /radmin|vpn|tun|tap|virtual|wireguard|zerotier|tailscale|hamachi|loopback|wsl/i;
+const CGNAT_RE = /^(100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.)/;
+const LINK_LOCAL_RE = /^169\.254\./;
+
+function isPrivateLan(ip) {
+  return /^192\.168\./.test(ip) || /^10\./.test(ip) || /^172\.(1[6-9]|2\d|3[01])\./.test(ip);
+}
+
+function scoreNetwork(name, ip) {
+  let score = 0;
+  if (/radmin/i.test(name)) score -= 120;
+  if (VPN_NAME_PATTERNS.test(name)) score -= 80;
+  if (/wlan|wi-?fi|ethernet|以太|无线|本地连接/i.test(name)) score += 10;
+  if (/^192\.168\./.test(ip)) score += 120;
+  else if (/^10\./.test(ip)) score += 110;
+  else if (/^172\.(1[6-9]|2\d|3[01])\./.test(ip)) score += 100;
+  if (isPrivateLan(ip)) score += 100;
+  if (CGNAT_RE.test(ip)) score -= 80;
+  if (LINK_LOCAL_RE.test(ip)) score -= 100;
+  return score;
+}
+
+function listNetworks() {
   const out = [];
   const nets = os.networkInterfaces();
   for (const name of Object.keys(nets)) {
     for (const net of nets[name] || []) {
-      if (net.family === 'IPv4' && !net.internal) out.push(net.address);
+      if (net.family === 'IPv4' && !net.internal) {
+        out.push({
+          name,
+          address: net.address,
+          netmask: net.netmask,
+          cidr: net.cidr || '',
+          score: scoreNetwork(name, net.address)
+        });
+      }
     }
   }
+  out.sort((a, b) => b.score - a.score || a.address.localeCompare(b.address));
   return out;
+}
+
+function getLanIPs() {
+  return listNetworks().map((n) => n.address);
 }
 
 function wordToSync(w) {
@@ -278,13 +313,14 @@ function createSyncServer({ store, getData, saveData, notifyDataChanged }) {
   async function getStatus() {
     const cfg = store.getServerConfig();
     const enabled = !!server;
-    const ips = getLanIPs();
+    const networks = listNetworks();
+    let selected = networks.find((n) => n.address === cfg.selectedIp) || null;
+    if (!selected && networks.length) selected = networks[0];
+    const ip = selected ? selected.address : '';
     let qr = null;
-    let ip = '';
-    if (enabled && ips.length) {
-      ip = ips[0];
+    if (enabled && selected) {
       try {
-        qr = await makePairQrDataUrl(ip, activePort, cfg.pairingCode);
+        qr = await makePairQrDataUrl(selected.address, activePort, cfg.pairingCode);
       } catch (e) {
         /* QR 失败不影响服务 */
       }
@@ -293,7 +329,9 @@ function createSyncServer({ store, getData, saveData, notifyDataChanged }) {
       enabled,
       port: activePort || cfg.port,
       ip,
-      ips,
+      ips: networks.map((n) => n.address),
+      networks: networks.map((n) => ({ name: n.name, address: n.address })),
+      selectedIp: ip,
       pairingCode: cfg.pairingCode,
       codeExpiresAt: cfg.codeExpiresAt,
       qr,
@@ -302,7 +340,12 @@ function createSyncServer({ store, getData, saveData, notifyDataChanged }) {
     };
   }
 
-  return { start, stop, getStatus };
+  async function setPreferredIp(ip) {
+    store.setSelectedIp(ip);
+    return getStatus();
+  }
+
+  return { start, stop, getStatus, setPreferredIp };
 }
 
-module.exports = { createSyncServer, getLanIPs };
+module.exports = { createSyncServer, getLanIPs, listNetworks };

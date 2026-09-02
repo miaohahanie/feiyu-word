@@ -17,6 +17,7 @@ contextBridge.exposeInMainWorld('petAPI', {
   getSyncStatus: () => ipcRenderer.invoke('sync-status'),
   setSyncServer: (opts) => ipcRenderer.invoke('sync-server-set', opts),
   refreshSyncCode: () => ipcRenderer.invoke('sync-refresh-code'),
+  selectSyncIp: (ip) => ipcRenderer.invoke('sync-select-ip', ip),
   removeSyncDevice: (deviceId) => ipcRenderer.invoke('sync-remove-device', deviceId),
   recordWordDelete: (payload) => ipcRenderer.invoke('sync-record-delete', payload),
   onSyncDataUpdated: (callback) => ipcRenderer.on('sync-data-updated', callback),
