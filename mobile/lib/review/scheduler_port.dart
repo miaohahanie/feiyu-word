@@ -4,6 +4,7 @@ import '../models/word.dart';
 /// 修改此处时必须同步电脑端两处实现，并运行 test/scheduler_port_test.dart。
 const int _dayMs = 24 * 60 * 60 * 1000;
 const int _minMs = 60 * 1000;
+const int _hourMs = 60 * 60 * 1000;
 
 int mapRatingToQuality(int rating) {
   final r = rating.clamp(0, 10);
@@ -31,14 +32,26 @@ Word applyRating(Word word, int rating, int now, String eventId) {
     word.nextReview = now + (r <= 1 ? 10 * _minMs : 4 * 60 * _minMs);
   } else {
     word.reps += 1;
+    // 前几次复习采用当天短间隔（2h → 4h → 8h），提高复习密度
     if (word.reps == 1) {
-      word.interval = 1;
+      word.interval = 0;
+      word.nextReview = now + 2 * _hourMs;
     } else if (word.reps == 2) {
+      word.interval = 0;
+      word.nextReview = now + 4 * _hourMs;
+    } else if (word.reps == 3) {
+      word.interval = 0;
+      word.nextReview = now + 8 * _hourMs;
+    } else if (word.reps == 4) {
+      word.interval = 1;
+      word.nextReview = now + _dayMs;
+    } else if (word.reps == 5) {
       word.interval = 6;
+      word.nextReview = now + 6 * _dayMs;
     } else {
       word.interval = (word.interval * word.ease).round().clamp(1, 1000000);
+      word.nextReview = now + word.interval * _dayMs;
     }
-    word.nextReview = now + word.interval * _dayMs;
     final efDelta = 0.1 - (5 - q) * (0.08 + (5 - q) * 0.02);
     word.ease = (word.ease + efDelta).clamp(1.3, 99.0);
   }

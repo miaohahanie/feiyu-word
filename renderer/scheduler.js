@@ -55,14 +55,27 @@ function rateWord(word, rating) {
     word.nextReview = Date.now() + delay;
   } else {
     word.reps += 1;
+    // 前几次复习采用当天短间隔（2h → 4h → 8h），提高 8:00~22:00 的复习密度；
+    // 之后进入 1 天 → 6 天 → interval * ease 的长间隔阶段。
     if (word.reps === 1) {
-      word.interval = 1;
+      word.interval = 0;
+      word.nextReview = Date.now() + 2 * 60 * 60 * 1000;
     } else if (word.reps === 2) {
+      word.interval = 0;
+      word.nextReview = Date.now() + 4 * 60 * 60 * 1000;
+    } else if (word.reps === 3) {
+      word.interval = 0;
+      word.nextReview = Date.now() + 8 * 60 * 60 * 1000;
+    } else if (word.reps === 4) {
+      word.interval = 1;
+      word.nextReview = Date.now() + DAY_MS;
+    } else if (word.reps === 5) {
       word.interval = 6;
+      word.nextReview = Date.now() + 6 * DAY_MS;
     } else {
       word.interval = Math.max(1, Math.round(word.interval * word.ease));
+      word.nextReview = Date.now() + word.interval * DAY_MS;
     }
-    word.nextReview = Date.now() + word.interval * DAY_MS;
     // EF 更新：q=5 每次 +0.1，q=3 每次 -0.14，下限 1.3
     const efDelta = 0.1 - (5 - q) * (0.08 + (5 - q) * 0.02);
     word.ease = Math.max(1.3, word.ease + efDelta);

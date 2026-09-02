@@ -6,6 +6,8 @@ import 'app_state.dart';
 import 'data/app_database.dart';
 import 'data/settings_repository.dart';
 import 'data/word_repository.dart';
+import 'notifications/notification_service.dart';
+import 'notifications/reminder_scheduler.dart';
 import 'sync/pairing_service.dart';
 
 Future<void> main() async {
@@ -17,6 +19,17 @@ Future<void> main() async {
   final pairing = PairingService(settings: settings, repository: repository);
   final state = AppState(repository: repository, settings: settings, pairing: pairing);
   await state.init();
+
+  // 通知权限与每日复习提醒（默认开启，失败不影响 App 启动）
+  try {
+    await NotificationService.init();
+    final remindersEnabled = await settings.getBool('reminders.enabled') ?? true;
+    if (remindersEnabled) {
+      await ReminderScheduler.schedule();
+    }
+  } catch (_) {
+    /* 忽略通知初始化失败 */
+  }
 
   runApp(
     MultiProvider(

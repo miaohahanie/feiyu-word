@@ -23,6 +23,9 @@ dependencies:
   uuid: ^4.4.0
   # 日期格式化
   intl: ^0.19.0
+  # 本地通知（每 2 小时复习提醒）
+  flutter_local_notifications: ^17.2.1
+  timezone: ^0.9.4
 
 dev_dependencies:
   flutter_test:

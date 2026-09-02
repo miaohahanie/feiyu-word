@@ -13,28 +13,40 @@ Word newWord() {
 
 void main() {
   const now = 1000000000000;
+  const hour = 60 * 60 * 1000;
+  const day = 24 * 60 * 60 * 1000;
 
-  test('Q5 连续高分：1天→6天→interval*ease，且到达21天后已掌握', () {
+  test('前 3 次高分按 2h/4h/8h 短间隔，之后进入 1天/6天/interval*ease，21天后已掌握', () {
     final w = newWord();
 
     applyRating(w, 8, now, 'e1');
     expect(w.reps, 1);
-    expect(w.interval, 1);
-    expect(w.nextReview, now + 1 * 24 * 60 * 60 * 1000);
-    expect(w.ease, 2.6);
+    expect(w.interval, 0);
+    expect(w.nextReview, now + 2 * hour);
+    expect(w.ease, closeTo(2.6, 1e-9));
 
     applyRating(w, 8, now + 1000, 'e2');
-    expect(w.reps, 2);
-    expect(w.interval, 6);
-    expect(w.ease, 2.7);
+    expect(w.nextReview, now + 1000 + 4 * hour);
+    expect(w.ease, closeTo(2.7, 1e-9));
 
     applyRating(w, 8, now + 2000, 'e3');
-    expect(w.reps, 3);
-    expect(w.interval, 16); // round(6 * 2.7)
-    expect(w.mastered, false);
+    expect(w.nextReview, now + 2000 + 8 * hour);
+    expect(w.ease, closeTo(2.8, 1e-9));
 
     applyRating(w, 8, now + 3000, 'e4');
-    expect(w.interval, 45); // round(16 * 2.8)
+    expect(w.interval, 1);
+    expect(w.nextReview, now + 3000 + day);
+
+    applyRating(w, 8, now + 4000, 'e5');
+    expect(w.interval, 6);
+    expect(w.nextReview, now + 4000 + 6 * day);
+
+    applyRating(w, 8, now + 5000, 'e6');
+    expect(w.interval, 18); // round(6 * 3.0)
+    expect(w.mastered, false);
+
+    applyRating(w, 8, now + 6000, 'e7');
+    expect(w.interval, 56); // round(18 * 3.1)
     expect(w.mastered, true);
   });
 
@@ -50,12 +62,13 @@ void main() {
     expect(w.nextReview, now + 2000 + 10 * 60 * 1000);
   });
 
-  test('Q3 模糊：ease 下降 0.14', () {
+  test('Q3 模糊：ease 下降 0.14，仍按 2h 短间隔进入当天下一轮', () {
     final w = newWord();
     applyRating(w, 5, now, 'e1');
-    expect(w.ease, 2.36);
+    expect(w.ease, closeTo(2.36, 1e-9));
     expect(w.reps, 1);
-    expect(w.interval, 1);
+    expect(w.interval, 0);
+    expect(w.nextReview, now + 2 * hour);
   });
 
   test('历史记录写入与读取', () {

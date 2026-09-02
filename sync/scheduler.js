@@ -45,14 +45,26 @@ function rateWord(word, rating, now, eventId) {
     word.nextReview = base + delay;
   } else {
     word.reps += 1;
+    // 前几次复习采用当天短间隔（2h → 4h → 8h），与 renderer/scheduler.js、手机端保持一致
     if (word.reps === 1) {
-      word.interval = 1;
+      word.interval = 0;
+      word.nextReview = base + 2 * 60 * 60 * 1000;
     } else if (word.reps === 2) {
+      word.interval = 0;
+      word.nextReview = base + 4 * 60 * 60 * 1000;
+    } else if (word.reps === 3) {
+      word.interval = 0;
+      word.nextReview = base + 8 * 60 * 60 * 1000;
+    } else if (word.reps === 4) {
+      word.interval = 1;
+      word.nextReview = base + DAY_MS;
+    } else if (word.reps === 5) {
       word.interval = 6;
+      word.nextReview = base + 6 * DAY_MS;
     } else {
       word.interval = Math.max(1, Math.round(word.interval * word.ease));
+      word.nextReview = base + word.interval * DAY_MS;
     }
-    word.nextReview = base + word.interval * DAY_MS;
     const efDelta = 0.1 - (5 - q) * (0.08 + (5 - q) * 0.02);
     word.ease = Math.max(1.3, word.ease + efDelta);
   }

@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../app_state.dart';
+import '../data/settings_repository.dart';
+import '../notifications/notification_service.dart';
+import '../notifications/reminder_scheduler.dart';
 import '../sync/pairing_service.dart';
 
 class SettingsPage extends StatefulWidget {
@@ -17,6 +20,17 @@ class _SettingsPageState extends State<SettingsPage> {
   final _codeCtrl = TextEditingController();
 
   String _message = '';
+  bool _remindersEnabled = true;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final settings = context.read<SettingsRepository>();
+      final enabled = await settings.getBool('reminders.enabled') ?? true;
+      if (mounted) setState(() => _remindersEnabled = enabled);
+    });
+  }
 
   @override
   void dispose() {
@@ -24,6 +38,26 @@ class _SettingsPageState extends State<SettingsPage> {
     _portCtrl.dispose();
     _codeCtrl.dispose();
     super.dispose();
+  }
+
+  Future<void> _toggleReminders(bool value) async {
+    final settings = context.read<SettingsRepository>();
+    if (value) {
+      final ok = await NotificationService.requestPermission();
+      if (!ok) {
+        if (mounted) {
+          setState(() => _remindersEnabled = false);
+          setState(() => _message = '通知权限未授予，请在系统设置中开启');
+        }
+        return;
+      }
+      await settings.setBool('reminders.enabled', true);
+      await ReminderScheduler.schedule();
+    } else {
+      await settings.setBool('reminders.enabled', false);
+      await ReminderScheduler.cancel();
+    }
+    if (mounted) setState(() => _remindersEnabled = value);
   }
 
   Future<void> _pairManual() async {
@@ -132,6 +166,15 @@ class _SettingsPageState extends State<SettingsPage> {
                   ],
                 ],
               ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Card(
+            child: SwitchListTile(
+              value: _remindersEnabled,
+              onChanged: _toggleReminders,
+              title: const Text('开启复习提醒'),
+              subtitle: const Text('每天 08:00–22:00 每 2 小时提醒：8 / 10 / 12 / 14 / 16 / 18 / 20 / 22 点'),
             ),
           ),
           const SizedBox(height: 8),
