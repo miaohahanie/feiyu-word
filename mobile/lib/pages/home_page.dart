@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../app_state.dart';
+import '../data/word_repository.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -12,6 +13,7 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   int _dueCount = 0;
+  int _reviewedToday = 0;
 
   @override
   void initState() {
@@ -21,8 +23,15 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> _loadDue() async {
     final state = context.read<AppState>();
+    final repo = context.read<WordRepository>();
     final count = await state.dueCount();
-    if (mounted) setState(() => _dueCount = count);
+    final reviewed = await repo.countTodayEvents();
+    if (mounted) {
+      setState(() {
+        _dueCount = count;
+        _reviewedToday = reviewed;
+      });
+    }
   }
 
   @override
@@ -44,6 +53,8 @@ class _HomePageState extends State<HomePage> {
                     '今日到期：$_dueCount 词',
                     style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
                   ),
+                  const SizedBox(height: 4),
+                  Text('今日已复习：$_reviewedToday 词'),
                   const SizedBox(height: 8),
                   Text('当前词本：${_selectedBookName(state)}'),
                   const SizedBox(height: 12),

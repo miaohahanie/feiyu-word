@@ -20,6 +20,11 @@ class _ReviewPageState extends State<ReviewPage> {
   bool _revealed = false;
   bool _loading = true;
 
+  int _finished = 0;
+  int _total = 0;
+  int _todayCount = 0;
+  Map<int, int> _ratingCounts = {};
+
   @override
   void initState() {
     super.initState();
@@ -37,21 +42,38 @@ class _ReviewPageState extends State<ReviewPage> {
     final now = DateTime.now().millisecondsSinceEpoch;
     final due = await repo.getDueWords(bookId, now);
     final queue = due.take(20).toList();
+    await _refreshToday();
     if (mounted) {
       setState(() {
         _queue = queue;
         _current = queue.isEmpty ? null : queue.first;
+        _total = queue.length;
+        _finished = 0;
         _loading = false;
+      });
+    }
+  }
+
+  Future<void> _refreshToday() async {
+    final repo = context.read<WordRepository>();
+    final count = await repo.countTodayEvents();
+    final counts = await repo.ratingCountsToday();
+    if (mounted) {
+      setState(() {
+        _todayCount = count;
+        _ratingCounts = counts;
       });
     }
   }
 
   void _next() {
     setState(() {
+      _finished += 1;
       _queue = _queue.skip(1).toList();
       _current = _queue.isEmpty ? null : _queue.first;
       _revealed = false;
     });
+    _refreshToday();
   }
 
   Future<void> _rate(int rating) async {
@@ -73,16 +95,65 @@ class _ReviewPageState extends State<ReviewPage> {
     _next();
   }
 
+  Future<void> _skip() async {
+    final repo = context.read<WordRepository>();
+    final word = _current;
+    if (word == null) return;
+    final now = DateTime.now().millisecondsSinceEpoch;
+    word.nextReview = now + 30 * 60 * 1000;
+    word.updatedAt = now;
+    await repo.updateWord(word);
+    _next();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('复习')),
+      appBar: AppBar(
+        title: Text(_total > 0 ? '复习（${_finished + (_queue.isNotEmpty ? 1 : 0)}/$_total）' : '复习'),
+      ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _current == null
-              ? const Center(child: Text('今天没有到期词，休息一下吧～'))
+              ? _buildSummary()
               : _buildCard(),
     );
+  }
+
+  Widget _buildSummary() {
+    return Center(
+      child: ListView(
+        shrinkWrap: true,
+        padding: const EdgeInsets.all(24),
+        children: [
+          const Icon(Icons.celebration, size: 64, color: Colors.amber),
+          const SizedBox(height: 12),
+          const Text('今天的复习全部完成～', textAlign: TextAlign.center, style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 24),
+          Text('今日已复习 $_todayCount 词', textAlign: TextAlign.center, style: const TextStyle(fontSize: 18)),
+          const SizedBox(height: 16),
+          for (final e in _ratingCounts.entries)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 2),
+              child: Text(
+                '${_ratingLabel(e.key)}：${e.value} 次',
+                textAlign: TextAlign.center,
+              ),
+            ),
+          const SizedBox(height: 24),
+          FilledButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('返回首页'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _ratingLabel(int rating) {
+    if (rating <= 1) return '不认识（1）';
+    if (rating <= 4) return '模糊（4）';
+    return '认识（8）';
   }
 
   Widget _buildCard() {
@@ -154,7 +225,7 @@ class _ReviewPageState extends State<ReviewPage> {
           ),
           const SizedBox(height: 8),
           TextButton(
-            onPressed: _next,
+            onPressed: _skip,
             child: const Text('跳过（30 分钟后）'),
           ),
         ],

@@ -13,10 +13,18 @@ class AppDatabase {
     final dbPath = p.join(databasesPath, 'word_pet_mobile.db');
     _db = await openDatabase(
       dbPath,
-      version: 1,
+      version: 2,
       onCreate: _onCreate,
+      onUpgrade: _onUpgrade,
     );
     return _db!;
+  }
+
+  Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
+    if (oldVersion < 2) {
+      // 新增本地复习历史，用于“最近 3 次高分且间隔>=21天”的已掌握判断
+      await db.execute("ALTER TABLE words ADD COLUMN historyJson TEXT DEFAULT '[]'");
+    }
   }
 
   Future<void> _onCreate(Database db, int version) async {
@@ -38,6 +46,7 @@ class AppDatabase {
         meaning TEXT DEFAULT '',
         phonetic TEXT DEFAULT '',
         examplesJson TEXT DEFAULT '[]',
+        historyJson TEXT DEFAULT '[]',
         reps INTEGER DEFAULT 0,
         ease REAL DEFAULT 2.5,
         interval INTEGER DEFAULT 0,

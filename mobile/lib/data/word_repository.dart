@@ -173,4 +173,31 @@ class WordRepository {
     if (rows.isEmpty) return 0;
     return (rows.first['c'] as int?) ?? 0;
   }
+
+  Future<int> countTodayEvents() async {
+    final db = await _db();
+    final now = DateTime.now();
+    final start = DateTime(now.year, now.month, now.day).millisecondsSinceEpoch;
+    final rows = await db.rawQuery(
+      'SELECT COUNT(*) AS c FROM review_events WHERE createdAt >= ?',
+      [start],
+    );
+    if (rows.isEmpty) return 0;
+    return (rows.first['c'] as int?) ?? 0;
+  }
+
+  Future<Map<int, int>> ratingCountsToday() async {
+    final db = await _db();
+    final now = DateTime.now();
+    final start = DateTime(now.year, now.month, now.day).millisecondsSinceEpoch;
+    final rows = await db.rawQuery(
+      'SELECT rating, COUNT(*) AS c FROM review_events WHERE createdAt >= ? GROUP BY rating ORDER BY rating ASC',
+      [start],
+    );
+    final map = <int, int>{};
+    for (final r in rows) {
+      map[(r['rating'] as int?) ?? 0] = (r['c'] as int?) ?? 0;
+    }
+    return map;
+  }
 }
