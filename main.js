@@ -11,6 +11,7 @@ const {
 } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const { spawn } = require('child_process');
 const { createSyncStore } = require('./sync/sync-store');
 const { createSyncServer } = require('./sync/sync-server');
 
@@ -620,6 +621,21 @@ ipcMain.handle('sync-select-ip', async (event, ip) => {
     return await syncServer.setPreferredIp(ip);
   } catch (e) {
     return syncStatusOrNull();
+  }
+});
+
+ipcMain.handle('sync-allow-firewall', async () => {
+  try {
+    // 用管理员 PowerShell 触发 UAC，添加 TCP 8787 入站放行规则（公用/专用/域）
+    const ps =
+      "Start-Process -FilePath 'netsh.exe' -ArgumentList 'advfirewall','firewall','add','rule','name=WordPetSync8787','dir=in','action=allow','protocol=TCP','localport=8787','profile=public,private,domain' -Verb RunAs";
+    spawn('powershell.exe', ['-NoProfile', '-Command', ps], {
+      windowsHide: true,
+      detached: true
+    });
+    return { ok: true, requested: true };
+  } catch (e) {
+    return { ok: false, error: String((e && e.message) || e) };
   }
 });
 

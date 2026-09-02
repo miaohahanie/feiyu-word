@@ -1140,6 +1140,12 @@
         refreshSyncStatus();
       });
     }
+    $('#btn-firewall-allow').addEventListener('click', async () => {
+      if (window.petAPI && window.petAPI.allowSyncFirewall) {
+        await window.petAPI.allowSyncFirewall();
+        alert('已在后台发起防火墙放行请求，请在 Windows UAC 弹窗中点击“是”。\n如果没看到弹窗，请以管理员身份运行：\nnetsh advfirewall firewall add rule name="WordPetSync8787" dir=in action=allow protocol=TCP localport=8787 profile=public,private,domain');
+      }
+    });
     $('#btn-sync-refresh').addEventListener('click', async () => {
       if (window.petAPI && window.petAPI.refreshSyncCode) await window.petAPI.refreshSyncCode();
       refreshSyncStatus();
