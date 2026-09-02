@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../app_state.dart';
-import '../data/settings_repository.dart';
 import '../sync/pairing_service.dart';
 
 class SettingsPage extends StatefulWidget {

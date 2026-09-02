@@ -47,16 +47,21 @@ class _HomePageState extends State<HomePage> {
                   const SizedBox(height: 8),
                   Text('当前词本：${_selectedBookName(state)}'),
                   const SizedBox(height: 12),
-                  DropdownButtonFormField<String>(
-                    value: state.selectedBookId,
+                  InputDecorator(
                     decoration: const InputDecoration(labelText: '选择词本'),
-                    items: state.books
-                        .map((b) => DropdownMenuItem(value: b.id, child: Text('${b.name}（${b.count}）')))
-                        .toList(),
-                    onChanged: (v) async {
-                      if (v != null) await state.selectBook(v);
-                      _loadDue();
-                    },
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<String>(
+                        value: state.selectedBookId,
+                        isExpanded: true,
+                        items: state.books
+                            .map((b) => DropdownMenuItem(value: b.id, child: Text('${b.name}（${b.count}）')))
+                            .toList(),
+                        onChanged: (v) async {
+                          if (v != null) await state.selectBook(v);
+                          _loadDue();
+                        },
+                      ),
+                    ),
                   ),
                 ],
               ),

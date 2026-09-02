@@ -8,3 +8,6 @@ dist/
 # 需求文档（内部文档，不上传；手机端需求文档例外）
 需求文档.md
 !mobile/需求文档.md
+
+# 本机 Flutter/Android 环境变量脚本（含机器路径，不上传）
+scripts/flutter-env.sh

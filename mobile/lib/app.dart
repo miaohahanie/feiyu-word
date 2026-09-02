@@ -24,7 +24,7 @@ class WordPetApp extends StatelessWidget {
         '/': (_) => const HomePage(),
         '/settings': (_) => const SettingsPage(),
         '/review': (_) => const ReviewPage(),
-        '/license': (_) => const LicensePage(),
+        '/license': (_) => const AboutLicensePage(),
         '/qr': (_) => const QrScannerPage(),
       },
     );

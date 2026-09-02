@@ -5,7 +5,6 @@ import '../data/word_repository.dart';
 import '../models/review_event.dart';
 import '../models/word.dart';
 import 'pairing_service.dart';
-import 'sync_client.dart';
 
 class SyncResult {
   final bool ok;

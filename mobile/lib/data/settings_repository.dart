@@ -3,16 +3,18 @@ import 'package:sqflite/sqflite.dart';
 import 'app_database.dart';
 
 class SettingsRepository {
-  Future<Database> get _db => AppDatabase.instance.database;
+  Future<Database> _db() => AppDatabase.instance.database;
 
   Future<String?> get(String key) async {
-    final rows = await _db.query('settings', where: 'key = ?', whereArgs: [key]);
+    final db = await _db();
+    final rows = await db.query('settings', where: 'key = ?', whereArgs: [key]);
     if (rows.isEmpty) return null;
     return rows.first['value'] as String?;
   }
 
   Future<void> set(String key, String value) async {
-    await _db.insert(
+    final db = await _db();
+    await db.insert(
       'settings',
       {'key': key, 'value': value},
       conflictAlgorithm: ConflictAlgorithm.replace,
@@ -20,7 +22,8 @@ class SettingsRepository {
   }
 
   Future<void> remove(String key) async {
-    await _db.delete('settings', where: 'key = ?', whereArgs: [key]);
+    final db = await _db();
+    await db.delete('settings', where: 'key = ?', whereArgs: [key]);
   }
 
   Future<String?> getString(String key) => get(key);

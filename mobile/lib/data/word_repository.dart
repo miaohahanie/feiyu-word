@@ -6,10 +6,10 @@ import '../models/word.dart';
 import 'app_database.dart';
 
 class WordRepository {
-  Future<Database> get _db => AppDatabase.instance.database;
+  Future<Database> _db() => AppDatabase.instance.database;
 
   Future<void> upsertBooks(List<Book> books) async {
-    final db = await _db;
+    final db = await _db();
     final batch = db.batch();
     for (final b in books) {
       batch.insert(
@@ -22,12 +22,13 @@ class WordRepository {
   }
 
   Future<List<Book>> getBooks() async {
-    final rows = await _db.query('books', orderBy: 'name ASC');
+    final db = await _db();
+    final rows = await db.query('books', orderBy: 'name ASC');
     return rows.map((r) => Book.fromMap(r)).toList();
   }
 
   Future<void> upsertWords(List<Word> words) async {
-    final db = await _db;
+    final db = await _db();
     final batch = db.batch();
     for (final w in words) {
       batch.insert(
@@ -40,7 +41,7 @@ class WordRepository {
   }
 
   Future<void> removeWords(String bookId, List<String> words) async {
-    final db = await _db;
+    final db = await _db();
     for (final word in words) {
       await db.delete(
         'words',
@@ -51,7 +52,7 @@ class WordRepository {
   }
 
   Future<List<Word>> getWords(String? bookId, {String? keyword}) async {
-    final db = await _db;
+    final db = await _db();
     final where = <String>[];
     final args = <Object>[];
 
@@ -76,10 +77,11 @@ class WordRepository {
   }
 
   Future<List<Word>> getDueWords(String bookId, int now) async {
-    final db = await _db;
+    final db = await _db();
     final rows = await db.query(
       'words',
-      where: 'bookId = ? AND deleted = 0 AND mastered = 0 AND (nextReview <= 0 OR nextReview <= ?)',
+      where:
+          'bookId = ? AND deleted = 0 AND mastered = 0 AND (nextReview <= 0 OR nextReview <= ?)',
       whereArgs: [bookId, now],
       orderBy: 'nextReview ASC',
     );
@@ -87,7 +89,8 @@ class WordRepository {
   }
 
   Future<Word?> getWord(String bookId, String word) async {
-    final rows = await _db.query(
+    final db = await _db();
+    final rows = await db.query(
       'words',
       where: 'bookId = ? AND word = ?',
       whereArgs: [bookId, word],
@@ -98,7 +101,8 @@ class WordRepository {
   }
 
   Future<void> updateWord(Word w) async {
-    await _db.insert(
+    final db = await _db();
+    await db.insert(
       'words',
       w.toMap(),
       conflictAlgorithm: ConflictAlgorithm.replace,
@@ -106,7 +110,8 @@ class WordRepository {
   }
 
   Future<void> saveReviewEvent(ReviewEvent event) async {
-    await _db.insert(
+    final db = await _db();
+    await db.insert(
       'review_events',
       event.toMap(),
       conflictAlgorithm: ConflictAlgorithm.replace,
@@ -114,7 +119,8 @@ class WordRepository {
   }
 
   Future<List<ReviewEvent>> getPendingEvents({int limit = 200}) async {
-    final rows = await _db.query(
+    final db = await _db();
+    final rows = await db.query(
       'review_events',
       where: 'synced = 0',
       orderBy: 'createdAt ASC',
@@ -124,7 +130,7 @@ class WordRepository {
   }
 
   Future<void> markEventsSynced(List<String> eventIds) async {
-    final db = await _db;
+    final db = await _db();
     final batch = db.batch();
     for (final id in eventIds) {
       batch.update(
@@ -138,7 +144,8 @@ class WordRepository {
   }
 
   Future<int?> getSyncCursor(String key) async {
-    final rows = await _db.query(
+    final db = await _db();
+    final rows = await db.query(
       'sync_state',
       where: 'key = ?',
       whereArgs: [key],
@@ -149,7 +156,8 @@ class WordRepository {
   }
 
   Future<void> setSyncCursor(String key, int value) async {
-    await _db.insert(
+    final db = await _db();
+    await db.insert(
       'sync_state',
       {'key': key, 'value': value.toString()},
       conflictAlgorithm: ConflictAlgorithm.replace,
@@ -157,7 +165,7 @@ class WordRepository {
   }
 
   Future<int> countDueWords(String bookId, int now) async {
-    final db = await _db;
+    final db = await _db();
     final rows = await db.rawQuery(
       'SELECT COUNT(*) AS c FROM words WHERE bookId = ? AND deleted = 0 AND mastered = 0 AND (nextReview <= 0 OR nextReview <= ?)',
       [bookId, now],

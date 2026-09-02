@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-class LicensePage extends StatelessWidget {
-  const LicensePage({super.key});
+class AboutLicensePage extends StatelessWidget {
+  const AboutLicensePage({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -24,12 +24,12 @@ class LicensePage extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(title: const Text('关于与许可')),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
+      body: const SingleChildScrollView(
+        padding: EdgeInsets.all(16),
         child: Card(
           child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Text(text, style: const TextStyle(fontSize: 14, height: 1.6)),
+            padding: EdgeInsets.all(16),
+            child: Text(text, style: TextStyle(fontSize: 14, height: 1.6)),
           ),
         ),
       ),

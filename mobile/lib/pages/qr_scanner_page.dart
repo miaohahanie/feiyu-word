@@ -20,6 +20,7 @@ class _QrScannerPageState extends State<QrScannerPage> {
     final raw = capture.barcodes.isEmpty ? null : capture.barcodes.first.rawValue;
     if (raw == null || raw.isEmpty) return;
     await _controller.stop();
+    if (!mounted) return;
     final pairing = context.read<PairingService>();
     final state = context.read<AppState>();
     final info = pairing.parseQr(raw);

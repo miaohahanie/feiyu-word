@@ -29,13 +29,11 @@ class _ReviewPageState extends State<ReviewPage> {
   Future<void> _load() async {
     final state = context.read<AppState>();
     final repo = context.read<WordRepository>();
-    final settings = context.read<SettingsRepository>();
     final bookId = state.selectedBookId;
     if (bookId == null) {
       setState(() => _loading = false);
       return;
     }
-    final deviceId = await settings.getString('sync.deviceId') ?? '';
     final now = DateTime.now().millisecondsSinceEpoch;
     final due = await repo.getDueWords(bookId, now);
     final queue = due.take(20).toList();
