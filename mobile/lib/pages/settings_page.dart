@@ -170,11 +170,29 @@ class _SettingsPageState extends State<SettingsPage> {
           ),
           const SizedBox(height: 8),
           Card(
-            child: SwitchListTile(
-              value: _remindersEnabled,
-              onChanged: _toggleReminders,
-              title: const Text('开启复习提醒'),
-              subtitle: const Text('每天 08:00–22:00 每 2 小时提醒：8 / 10 / 12 / 14 / 16 / 18 / 20 / 22 点'),
+            child: Column(
+              children: [
+                SwitchListTile(
+                  value: _remindersEnabled,
+                  onChanged: _toggleReminders,
+                  title: const Text('开启复习提醒'),
+                  subtitle: const Text('每天 08:00–22:00 每 2 小时提醒：8 / 10 / 12 / 14 / 16 / 18 / 20 / 22 点'),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                  child: OutlinedButton(
+                    onPressed: () async {
+                      await NotificationService.requestPermission();
+                      await NotificationService.showNow(
+                        '单词桌宠',
+                        '通知测试：看到这条消息说明通知已就绪',
+                      );
+                      if (mounted) setState(() => _message = '已发出测试通知');
+                    },
+                    child: const Text('立即测试通知'),
+                  ),
+                ),
+              ],
             ),
           ),
           const SizedBox(height: 8),

@@ -121,7 +121,7 @@ function applyEvents(data, bookId, events) {
   return { accepted, ignored, changedWords };
 }
 
-function createSyncServer({ store, getData, saveData, notifyDataChanged }) {
+function createSyncServer({ store, getData, saveData, lookupWord, notifyDataChanged }) {
   let server = null;
   let activePort = 0;
   let lastError = '';
@@ -257,6 +257,81 @@ function createSyncServer({ store, getData, saveData, notifyDataChanged }) {
           conflicts: [],
           changedWords: result.changedWords
         });
+      }
+
+      // 手机端在线查词
+      if (pathname === '/api/lookup' && req.method === 'POST') {
+        const body = await parseBody(req);
+        const word = String(body.word || '').trim();
+        if (!word) return sendJson(res, 400, { error: '缺少单词' });
+        const result = typeof lookupWord === 'function' ? await lookupWord(word) : null;
+        if (!result || !result.meaning) return sendJson(res, 404, { error: '未找到释义' });
+        return sendJson(res, 200, {
+          ok: true,
+          word: word.toLowerCase(),
+          meaning: result.meaning,
+          phonetic: result.phonetic || '',
+          source: result.source || ''
+        });
+      }
+
+      // 手机端添加单词（可带释义，缺释义时在线查）
+      if (pathname === '/api/word' && req.method === 'POST') {
+        const body = await parseBody(req);
+        const bookId = String(body.bookId || '').trim();
+        const key = String(body.word || '').trim().toLowerCase();
+        if (!bookId || !key || !/^[a-zA-Z][a-zA-Z\-' ]*$/.test(key)) {
+          return sendJson(res, 400, { error: '词本或单词格式不正确' });
+        }
+        const data = getData() || { books: [], stats: { days: {} }, settings: {} };
+        const book = data.books.find((b) => b.id === bookId);
+        if (!book) return sendJson(res, 404, { error: '词本不存在' });
+        if (!Array.isArray(book.words)) book.words = [];
+
+        const existing = book.words.find((w) => String(w.word || '').toLowerCase() === key);
+        let meaning = String(body.meaning || '').trim();
+        let phonetic = String(body.phonetic || '').trim();
+        if (!meaning && typeof lookupWord === 'function') {
+          const r = await lookupWord(key);
+          if (r && r.meaning) {
+            meaning = r.meaning;
+            if (!phonetic) phonetic = r.phonetic || '';
+          }
+        }
+        if (!meaning) {
+          return sendJson(res, 400, { error: '缺少释义，且在线查词失败，请手动补充中文释义' });
+        }
+
+        let w = existing;
+        if (w) {
+          w.meaning = meaning;
+          if (phonetic) w.phonetic = phonetic;
+          w.updatedAt = Date.now();
+        } else {
+          w = {
+            id: 'w' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
+            word: key,
+            meaning,
+            phonetic,
+            examples: [],
+            tags: [],
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+            mastered: false,
+            reps: 0,
+            ease: 2.5,
+            interval: 0,
+            lapses: 0,
+            history: [],
+            lastRating: null,
+            nextReview: Date.now() + ((data.settings && data.settings.firstReviewDelayMin) || 60) * 60 * 1000
+          };
+          book.words.unshift(w);
+        }
+        saveData(data);
+        store.touchDevice(device.deviceId);
+        if (typeof notifyDataChanged === 'function') notifyDataChanged();
+        return sendJson(res, 200, { ok: true, word: wordToSync(w) });
       }
 
       // 删除配对设备（同一设备 token 或任意已授权设备均可删除）

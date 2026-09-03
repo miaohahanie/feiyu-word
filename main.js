@@ -93,6 +93,7 @@ function initSync() {
     store: syncStore,
     getData: () => loadData(),
     saveData: (data) => saveData(data),
+    lookupWord: (word) => performOnlineLookup(word),
     notifyDataChanged: () => {
       try {
         if (win && !win.isDestroyed()) win.webContents.send('sync-data-updated');
@@ -485,8 +486,8 @@ function looksLikeChineseTranslation(text, word) {
   return norm(t) !== norm(word) && t.toLowerCase() !== word.toLowerCase();
 }
 
-ipcMain.handle('lookup-online', async (event, word) => {
-  const q = String(word || '').trim();
+async function performOnlineLookup(rawWord) {
+  const q = String(rawWord || '').trim();
   if (!q || !/^[a-zA-Z][a-zA-Z\-' ]*$/.test(q)) return null;
 
   // 1) 有道词典（中文释义 + 音标；新版接口返回 ec/simple 结构）
@@ -563,7 +564,9 @@ ipcMain.handle('lookup-online', async (event, word) => {
   }
 
   return null;
-});
+}
+
+ipcMain.handle('lookup-online', async (event, word) => performOnlineLookup(word));
 
 ipcMain.handle('translate-text', async (event, text) => {
   if (!text || text.length > 2000) return null;

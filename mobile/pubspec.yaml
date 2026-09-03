@@ -1,7 +1,7 @@
 name: word_pet_mobile
 description: 单词桌宠手机端（Android）—— 局域网同步 + 离线复习
 publish_to: 'none'
-version: 0.1.0+1
+version: 0.1.0+2
 
 environment:
   sdk: '>=3.0.0 <4.0.0'

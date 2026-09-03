@@ -6,6 +6,7 @@ import '../models/review_event.dart';
 import '../models/word.dart';
 import '../review/scheduler_port.dart';
 import 'pairing_service.dart';
+import 'sync_client.dart';
 
 class SyncResult {
   final bool ok;
@@ -103,5 +104,26 @@ class SyncService {
     await repository.updateWord(word);
     await repository.saveReviewEvent(event);
     return event;
+  }
+
+  /// 在线查词（走电脑端同步服务的 /api/lookup）
+  Future<LookupResult> lookupWord(String word) async {
+    final client = await pairing.buildClient();
+    if (client == null) throw Exception('尚未配对');
+    return client.lookup(word);
+  }
+
+  /// 添加单词到当前词本：电脑端入库 + 手机本地入库。
+  Future<Word> addWord(String word, {String? meaning, String? phonetic}) async {
+    final client = await pairing.buildClient();
+    if (client == null) throw Exception('尚未配对');
+    final serverWord = await client.addWord(
+      bookId: bookId,
+      word: word,
+      meaning: meaning,
+      phonetic: phonetic,
+    );
+    await repository.upsertWords([serverWord]);
+    return serverWord;
   }
 }

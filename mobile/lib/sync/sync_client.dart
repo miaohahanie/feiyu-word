@@ -50,6 +50,20 @@ class SyncPushResult {
   });
 }
 
+class LookupResult {
+  final String word;
+  final String meaning;
+  final String phonetic;
+  final String source;
+
+  const LookupResult({
+    required this.word,
+    required this.meaning,
+    this.phonetic = '',
+    this.source = '',
+  });
+}
+
 class SyncClient {
   final String host;
   final int port;
@@ -178,5 +192,46 @@ class SyncClient {
       ignored: (data['ignored'] ?? 0) as int,
       changedWords: changed,
     );
+  }
+
+  Future<LookupResult> lookup(String word) async {
+    final res = await _client.post(
+      Uri.parse('$baseUrl/api/lookup'),
+      headers: headers,
+      body: jsonEncode({'word': word}),
+    );
+    if (res.statusCode != 200) {
+      throw Exception('查词失败：${res.statusCode} ${res.body}');
+    }
+    final data = jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
+    return LookupResult(
+      word: (data['word'] ?? word).toString(),
+      meaning: (data['meaning'] ?? '').toString(),
+      phonetic: (data['phonetic'] ?? '').toString(),
+      source: (data['source'] ?? '').toString(),
+    );
+  }
+
+  Future<Word> addWord({
+    required String bookId,
+    required String word,
+    String? meaning,
+    String? phonetic,
+  }) async {
+    final res = await _client.post(
+      Uri.parse('$baseUrl/api/word'),
+      headers: headers,
+      body: jsonEncode({
+        'bookId': bookId,
+        'word': word,
+        'meaning': meaning ?? '',
+        'phonetic': phonetic ?? '',
+      }),
+    );
+    if (res.statusCode != 200) {
+      throw Exception('添加单词失败：${res.statusCode} ${res.body}');
+    }
+    final data = jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
+    return Word.fromServerJson(bookId, Map<String, dynamic>.from(data['word'] as Map));
   }
 }

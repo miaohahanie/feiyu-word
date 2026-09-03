@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'pages/add_word_page.dart';
 import 'pages/home_page.dart';
 import 'pages/license_page.dart';
 import 'pages/qr_scanner_page.dart';
@@ -24,6 +25,7 @@ class WordPetApp extends StatelessWidget {
         '/': (_) => const HomePage(),
         '/settings': (_) => const SettingsPage(),
         '/review': (_) => const ReviewPage(),
+        '/add': (_) => const AddWordPage(),
         '/license': (_) => const AboutLicensePage(),
         '/qr': (_) => const QrScannerPage(),
       },

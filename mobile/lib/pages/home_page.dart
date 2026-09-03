@@ -91,6 +91,17 @@ class _HomePageState extends State<HomePage> {
           ),
           Card(
             child: ListTile(
+              leading: const Icon(Icons.add),
+              title: const Text('添加单词'),
+              subtitle: const Text('手动添加或在线查词后加入词本'),
+              onTap: () async {
+                await Navigator.pushNamed(context, '/add');
+                _loadDue();
+              },
+            ),
+          ),
+          Card(
+            child: ListTile(
               leading: const Icon(Icons.school),
               title: const Text('开始复习'),
               subtitle: Text('$_dueCount 个到期词'),

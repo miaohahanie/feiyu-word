@@ -25,7 +25,11 @@ Future<void> main() async {
     await NotificationService.init();
     final remindersEnabled = await settings.getBool('reminders.enabled') ?? true;
     if (remindersEnabled) {
-      await ReminderScheduler.schedule();
+      final granted = await NotificationService.requestPermission();
+      await settings.setBool('reminders.permissionGranted', granted);
+      if (granted) {
+        await ReminderScheduler.schedule();
+      }
     }
   } catch (_) {
     /* 忽略通知初始化失败 */
