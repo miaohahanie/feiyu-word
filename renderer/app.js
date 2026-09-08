@@ -119,6 +119,159 @@
     return SOURCE_LABELS[src] || src || '未知';
   }
 
+  /* ---------------- 桌宠陪伴：成长 + 互动 + 播报 ---------------- */
+
+  const PET_LINES = [
+    '今天也要加油鸭～',
+    '背单词就像喂我吃饭，一天都不能停哦',
+    '我盯着你呢，别想偷懒～',
+    '记不住没关系，我会陪你多见几面',
+    '念念不忘，必有回响！',
+    '听说复习 3 次的词会变成永久记忆哦',
+    '累了就歇会儿，我一直在',
+    '今天查了几个新词呀？',
+    '坚持打卡的第 N 天，真棒！',
+    '你翻开的每一页都算数',
+    '别刷手机了，刷我吧～',
+    '单词不会跑，但机会会',
+    '哇，你认真的样子真好看',
+    '快去复习！我就静观其变',
+    '小步子，高频次，记得牢',
+    '今晚也要一起加油哦',
+    '知识就是力量，单词就是弹药',
+    '我在桌面上给你站岗～',
+    '要不要现在复习一轮？就一轮！',
+    '你有多久没见「abandon」了？'
+  ];
+  const PET_TIRED_LINE = '点这么多下，我要晕了啦……让我缓缓～';
+  let petTapTimer = null;
+  let lastPetTap = 0;
+  let petBroadcastDay = '';
+
+  function ensurePetData() {
+    if (!data.pet || typeof data.pet !== 'object') data.pet = {};
+    const p = data.pet;
+    if (typeof p.exp !== 'number') p.exp = 0;
+    if (typeof p.level !== 'number') p.level = 1;
+    if (typeof p.lastCheckInDay !== 'string') p.lastCheckInDay = '';
+    if (typeof p.lastAllClearDay !== 'string') p.lastAllClearDay = '';
+    if (typeof p.bestStreak !== 'number') p.bestStreak = 0;
+    return p;
+  }
+
+  // L(n)→L(n+1) 所需经验：50、75、113…（×1.5），封顶 L10
+  function petExpForNextLevel(level) {
+    return Math.round(50 * Math.pow(1.5, Math.min(level, 10) - 1));
+  }
+
+  function petAddExp(amount, options) {
+    const silent = options && options.silent;
+    const p = ensurePetData();
+    const before = p.level;
+    p.exp += amount;
+    while (p.level < 10 && p.exp >= petExpForNextLevel(p.level)) {
+      p.exp -= petExpForNextLevel(p.level);
+      p.level += 1;
+    }
+    if (p.level >= 10) p.exp = Math.min(p.exp, petExpForNextLevel(10));
+    scheduleSave();
+    if (!silent && p.level > before) {
+      setPet('success', '叮！升级啦，我现在是 Lv.' + p.level + '～');
+    }
+    return p.level > before;
+  }
+
+  // 每天首次复习打卡 +5
+  function petCheckIn() {
+    const p = ensurePetData();
+    const day = window.Scheduler.todayStr();
+    if (p.lastCheckInDay === day) return;
+    p.lastCheckInDay = day;
+    const streak = window.Scheduler.computeStreak(data.stats);
+    if (streak > p.bestStreak) {
+      p.bestStreak = streak;
+    }
+    petAddExp(5, { silent: true });
+  }
+
+  function petOnReview() {
+    petCheckIn();
+    petAddExp(2);
+  }
+
+  function petOnWordAdded() {
+    petAddExp(1, { silent: true });
+  }
+
+  // 当日到期词全部清空：每天只奖励一次 +10
+  function petOnAllClear() {
+    const p = ensurePetData();
+    const day = window.Scheduler.todayStr();
+    if (p.lastAllClearDay === day) return false;
+    if (window.Scheduler.computeTodayStats(data.stats).reviewed <= 0) return false;
+    p.lastAllClearDay = day;
+    return petAddExp(10, { silent: true });
+  }
+
+  function petSpeakOnTap() {
+    const now = Date.now();
+    const impatient = now - lastPetTap < 60 * 1000;
+    lastPetTap = now;
+    if (impatient) {
+      setPet('calm', PET_TIRED_LINE);
+      return;
+    }
+    setPet('summon', PET_LINES[Math.floor(Math.random() * PET_LINES.length)]);
+  }
+
+  // 每日首次显示桌宠时播报今日任务与打卡天数
+  function petDailyBroadcast() {
+    const day = window.Scheduler.todayStr();
+    if (petBroadcastDay === day) return;
+    petBroadcastDay = day;
+    const p = ensurePetData();
+    const streak = window.Scheduler.computeStreak(data.stats);
+    if (streak > p.bestStreak) {
+      p.bestStreak = streak;
+      scheduleSave();
+    }
+    const dueCount = window.Scheduler.dueWords(currentWords()).length;
+    const msg =
+      dueCount > 0
+        ? '今日待复习 ' + dueCount + ' 词，已连续打卡 ' + streak + ' 天'
+        : '今天没有到期词，已连续打卡 ' + streak + ' 天，歇会儿～';
+    setPet('summon', msg, 5000);
+  }
+
+  function bindPetInteractions() {
+    const petImg = $('#pet-img');
+    if (!petImg) return;
+    petImg.addEventListener('click', () => {
+      // 单击/双击区分：260ms 内无第二次点击才当单击
+      if (petTapTimer) {
+        clearTimeout(petTapTimer);
+        petTapTimer = null;
+        return; // 第二次点击由 dblclick 处理
+      }
+      petTapTimer = setTimeout(() => {
+        petTapTimer = null;
+        petSpeakOnTap();
+      }, 260);
+    });
+    petImg.addEventListener('dblclick', () => {
+      if (petTapTimer) {
+        clearTimeout(petTapTimer);
+        petTapTimer = null;
+      }
+      if (windowMode === 'panel') {
+        closePanel();
+      } else {
+        openPanel();
+      }
+    });
+    petImg.style.cursor = 'pointer';
+  }
+
   /* ---------------- 词汇本 ---------------- */
 
   function makeSeedWord(row, idx) {
@@ -416,6 +569,7 @@
     Object.assign(word, window.Scheduler.newWordBase(Date.now() + (data.settings.firstReviewDelayMin || 60) * 60 * 1000));
     words.unshift(word);
     window.Scheduler.updateDailyStats(data.stats, 'add', { added: 1 });
+    petOnWordAdded();
     return word;
   }
 
@@ -445,7 +599,11 @@
       $('#review-done').classList.remove('hidden');
       $('#review-done-info').textContent =
         '今天已完成 ' + window.Scheduler.computeTodayStats(data.stats).reviewed + ' 次复习。';
-      setPet('complete', '今天的复习全部完成～');
+      // 全清庆祝（每天一次 +10 经验）；升级时由 petAddExp 气泡提示，这里不覆盖
+      const leveledUp = petOnAllClear();
+      if (!leveledUp) {
+        setPet('complete', '今天的复习全部完成～');
+      }
       renderStats();
       // 复习期间收到的同步变更，现在安全了再应用
       if (pendingSyncReload) applySyncReload();
@@ -501,6 +659,7 @@
     window.Scheduler.rateWord(currentReview, rating);
     currentReview.updatedAt = Date.now();
     window.Scheduler.updateDailyStats(data.stats, 'review', { reviewed: 1, rating });
+    petOnReview();
     scheduleSave();
     setPet(
       rating >= 8 ? 'success' : rating >= 5 ? 'encourage' : 'calm',
@@ -1332,9 +1491,15 @@
     if (!data.stats) data.stats = { days: {} };
     if (!data.settings) data.settings = Object.assign({}, DEFAULTS.settings);
     migrateAndEnsureBooks();
+    ensurePetData();
     bindEvents();
+    bindPetInteractions();
     renderAll();
     refreshSyncStatus();
+    petDailyBroadcast();
+    if (window.petAPI && window.petAPI.onPetShown) {
+      window.petAPI.onPetShown(() => petDailyBroadcast());
+    }
     if (window.petAPI && window.petAPI.onSyncDataUpdated) {
       window.petAPI.onSyncDataUpdated(() => {
         // 复习进行中先不换 data（currentReview 引用旧对象会丢分），等本题结束再重载
@@ -1355,6 +1520,8 @@
     // 仅用于开发/自动测试
     window.__petDebug = {
       getData: () => data,
+      petGrowth: () => ensurePetData(),
+      petBroadcast: petDailyBroadcast,
       setDue: (word) => {
         const w = currentWords().find((x) => x.word.toLowerCase() === String(word).toLowerCase());
         if (w) w.nextReview = Date.now() - 1000;

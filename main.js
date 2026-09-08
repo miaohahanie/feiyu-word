@@ -102,7 +102,9 @@ function normalizeData(raw) {
   return {
     books,
     stats: data.stats && typeof data.stats === 'object' ? data.stats : { days: {} },
-    settings: Object.assign({}, DEFAULT_DATA.settings, data.settings || {})
+    settings: Object.assign({}, DEFAULT_DATA.settings, data.settings || {}),
+    // 桌宠成长数据随整份数据持久化
+    pet: data.pet && typeof data.pet === 'object' ? data.pet : { exp: 0, level: 1 }
   };
 }
 
@@ -315,7 +317,16 @@ function createWindow() {
               await new Promise(r => setTimeout(r, 500));
               const builtinText = document.querySelector('#query-result').innerText || '';
               const builtinDisplayOk = builtinText.includes('查询：abide') && builtinText.includes('abide');
-              return { added, meaning, word, reviewVisible, feedbackVisible, books, activeBookName, newBookWords, offlineHit, wordsAfterAbide, cacheAdded, builtinDisplayOk };
+              // 桌宠陪伴：复习/查词已积累经验；单击桌宠应说出台词
+              const petData = window.__petDebug.getData().pet || {};
+              document.querySelector('#pet-img').click();
+              await new Promise(r => setTimeout(r, 400));
+              const tapBubbleText = document.querySelector('#pet-bubble').textContent || '';
+              // 持久化回归：保存→重载后 pet 成长数据必须保留
+              await window.petAPI.saveData(window.__petDebug.getData());
+              const reloaded = await window.petAPI.loadData();
+              const petPersistOk = !!(reloaded.pet && reloaded.pet.exp >= 7);
+              return { added, meaning, word, reviewVisible, feedbackVisible, books, activeBookName, newBookWords, offlineHit, wordsAfterAbide, cacheAdded, builtinDisplayOk, petExp: petData.exp, petLevel: petData.level, tapBubbleText, petPersistOk };
             })()`
           );
           console.log('SMOKE_RESULT ' + JSON.stringify({ ...result, query }));
@@ -336,7 +347,11 @@ function createWindow() {
             query.offlineHit === true &&
             query.wordsAfterAbide === 2 &&
             query.cacheAdded === true &&
-            query.builtinDisplayOk === true;
+            query.builtinDisplayOk === true &&
+            query.petExp >= 7 &&
+            query.petLevel >= 1 &&
+            query.tapBubbleText.length > 0 &&
+            query.petPersistOk === true;
           console.log(ok ? 'SMOKE_OK' : 'SMOKE_FAIL');
           app.exit(ok ? 0 : 1);
         } catch (e) {
