@@ -4,6 +4,7 @@ contextBridge.exposeInMainWorld('petAPI', {
   getClipboard: () => ipcRenderer.invoke('get-clipboard'),
   loadData: () => ipcRenderer.invoke('load-data'),
   saveData: (data) => ipcRenderer.invoke('save-data', data),
+  restoreBackup: (backup) => ipcRenderer.invoke('restore-backup', backup),
   hideWindow: () => ipcRenderer.invoke('window-hide'),
   setWindowMode: (mode) => ipcRenderer.invoke('set-window-mode', mode),
   getWindowPosition: () => ipcRenderer.invoke('get-window-position'),

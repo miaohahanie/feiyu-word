@@ -243,6 +243,72 @@ class WordRepository {
     return (rows.first['c'] as int?) ?? 0;
   }
 
+  /// 记录一次滚动练习会话（供学习报告统计）。
+  Future<void> saveRollingSession({
+    required int words,
+    required int rounds,
+    required bool stoppedEarly,
+  }) async {
+    final db = await _db();
+    final now = DateTime.now();
+    final day =
+        '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+    await db.insert('rolling_sessions', {
+      'day': day,
+      'words': words,
+      'rounds': rounds,
+      'stoppedEarly': stoppedEarly ? 1 : 0,
+      'createdAt': now.millisecondsSinceEpoch,
+    });
+  }
+
+  /// 最近 days 天的每日复习量（day → 次数，缺失日期表示当天没复习）。
+  Future<Map<String, int>> dailyReviewCounts(int days) async {
+    final db = await _db();
+    final start = DateTime.now().millisecondsSinceEpoch - days * 24 * 60 * 60 * 1000;
+    final rows = await db.rawQuery(
+      "SELECT date(createdAt / 1000, 'unixepoch', 'localtime') AS day, COUNT(*) AS c "
+      'FROM review_events WHERE createdAt >= ? GROUP BY day',
+      [start],
+    );
+    return {
+      for (final r in rows)
+        (r['day'] as String): (r['c'] as int?) ?? 0,
+    };
+  }
+
+  /// 最近 days 天的评分分布。
+  Future<Map<int, int>> ratingDistribution(int days) async {
+    final db = await _db();
+    final start = DateTime.now().millisecondsSinceEpoch - days * 24 * 60 * 60 * 1000;
+    final rows = await db.rawQuery(
+      'SELECT rating, COUNT(*) AS c FROM review_events WHERE createdAt >= ? GROUP BY rating',
+      [start],
+    );
+    return {
+      for (final r in rows)
+        ((r['rating'] as num?) ?? 0).toInt(): (r['c'] as int?) ?? 0,
+    };
+  }
+
+  /// 最近 days 天的滚动练习汇总。
+  Future<Map<String, double>> rollingStats(int days) async {
+    final db = await _db();
+    final start = DateTime.now().millisecondsSinceEpoch - days * 24 * 60 * 60 * 1000;
+    final rows = await db.rawQuery(
+      'SELECT COUNT(*) AS sessions, AVG(rounds) AS avgRounds, SUM(words) AS words '
+      'FROM rolling_sessions WHERE createdAt >= ?',
+      [start],
+    );
+    if (rows.isEmpty) return {'sessions': 0, 'avgRounds': 0, 'words': 0};
+    final r = rows.first;
+    return {
+      'sessions': ((r['sessions'] as num?) ?? 0).toDouble(),
+      'avgRounds': ((r['avgRounds'] as num?) ?? 0).toDouble(),
+      'words': ((r['words'] as num?) ?? 0).toDouble(),
+    };
+  }
+
   Future<Map<int, int>> ratingCountsToday() async {
     final db = await _db();
     final now = DateTime.now();

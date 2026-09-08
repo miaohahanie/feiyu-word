@@ -4,6 +4,7 @@ import 'pages/add_word_page.dart';
 import 'pages/home_page.dart';
 import 'pages/license_page.dart';
 import 'pages/qr_scanner_page.dart';
+import 'pages/report_page.dart';
 import 'pages/review_page.dart';
 import 'pages/settings_page.dart';
 import 'pages/words_page.dart';
@@ -28,6 +29,7 @@ class WordPetApp extends StatelessWidget {
         '/review': (_) => const ReviewPage(),
         '/add': (_) => const AddWordPage(),
         '/words': (_) => const WordsPage(),
+        '/report': (_) => const ReportPage(),
         '/license': (_) => const AboutLicensePage(),
         '/qr': (_) => const QrScannerPage(),
       },

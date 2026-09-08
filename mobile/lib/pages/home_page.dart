@@ -146,6 +146,14 @@ class _HomePageState extends State<HomePage> {
           ),
           Card(
             child: ListTile(
+              leading: const Icon(Icons.insights),
+              title: const Text('学习报告'),
+              subtitle: const Text('打卡天数 / 每日复习量 / 评分分布'),
+              onTap: () => Navigator.pushNamed(context, '/report'),
+            ),
+          ),
+          Card(
+            child: ListTile(
               leading: const Icon(Icons.settings),
               title: const Text('设置'),
               onTap: () async {

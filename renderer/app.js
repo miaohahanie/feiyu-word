@@ -924,6 +924,77 @@
     download(book.name + '.csv', csv, 'text/csv;charset=utf-8');
   }
 
+  /* ---------------- 完整备份 / 恢复 ---------------- */
+
+  function exportBackup() {
+    const backup = {
+      type: 'word-pet-backup',
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      data: data
+    };
+    const d = new Date();
+    const stamp =
+      d.getFullYear() +
+      String(d.getMonth() + 1).padStart(2, '0') +
+      String(d.getDate()).padStart(2, '0');
+    download(
+      'word-pet-backup-' + stamp + '.json',
+      JSON.stringify(backup, null, 2),
+      'application/json'
+    );
+    setPet('success', '备份已导出，记得存到安全的地方～');
+  }
+
+  async function handleBackupFile(e) {
+    const file = e.target.files && e.target.files[0];
+    e.target.value = '';
+    if (!file) return;
+    let backup = null;
+    try {
+      backup = JSON.parse(await file.text());
+    } catch (err) {
+      alert('备份文件解析失败：' + (err && err.message));
+      return;
+    }
+    if (
+      !backup ||
+      backup.type !== 'word-pet-backup' ||
+      !backup.data ||
+      !Array.isArray(backup.data.books)
+    ) {
+      alert('这不是有效的单词桌宠备份文件');
+      return;
+    }
+    const bookCount = backup.data.books.length;
+    const wordCount = backup.data.books.reduce(
+      (n, b) => n + ((b.words && b.words.length) || 0),
+      0
+    );
+    if (
+      !confirm(
+        '恢复备份将覆盖当前全部词库与复习进度。\n备份包含 ' +
+          bookCount +
+          ' 个词本、共 ' +
+          wordCount +
+          ' 词。确定继续？'
+      )
+    ) {
+      return;
+    }
+    if (!window.petAPI || !window.petAPI.restoreBackup) {
+      alert('当前环境不支持恢复备份');
+      return;
+    }
+    const result = await window.petAPI.restoreBackup(backup);
+    if (result && result.ok) {
+      await applySyncReload();
+      alert('恢复成功，词库与复习进度已还原');
+    } else {
+      alert('恢复失败：' + ((result && result.error) || '未知错误'));
+    }
+  }
+
   /* 释义足够丰富就无需补全（含多义分隔或较长说明） */
   function isThinMeaning(m) {
     const s = String(m || '').trim();
@@ -1278,6 +1349,10 @@
     $('#btn-import').addEventListener('click', () => $('#file-import').click());
     $('#file-import').addEventListener('change', handleImportFile);
     $('#btn-export').addEventListener('click', exportData);
+
+    $('#btn-backup-export').addEventListener('click', exportBackup);
+    $('#btn-backup-import').addEventListener('click', () => $('#file-backup').click());
+    $('#file-backup').addEventListener('change', handleBackupFile);
 
     $('#edit-save').addEventListener('click', saveEdit);
     $('#edit-cancel').addEventListener('click', closeEdit);

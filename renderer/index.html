@@ -160,6 +160,11 @@
               <button id="btn-reset" class="neo-btn danger">清空当前词汇本</button>
               <button id="btn-seed" class="neo-btn">导入示例词</button>
             </div>
+            <div class="setting-row">
+              <span>完整备份 / 恢复</span>
+              <button id="btn-backup-export" class="neo-btn">导出备份</button>
+              <button id="btn-backup-import" class="neo-btn">恢复备份</button>
+            </div>
           </div>
 
           <div class="card">
@@ -240,6 +245,7 @@
   </div>
 
   <input id="file-import" type="file" accept=".csv,.json,.txt" class="hidden" />
+  <input id="file-backup" type="file" accept=".json" class="hidden" />
 
   <script src="scheduler.js"></script>
   <script src="dict-data.js"></script>

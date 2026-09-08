@@ -22,6 +22,7 @@ class _SettingsPageState extends State<SettingsPage> {
   String _message = '';
   bool _remindersEnabled = true;
   bool _keepScreenOn = false;
+  bool _spellingMode = false;
 
   @override
   void initState() {
@@ -30,10 +31,12 @@ class _SettingsPageState extends State<SettingsPage> {
       final settings = context.read<SettingsRepository>();
       final enabled = await settings.getBool('reminders.enabled') ?? true;
       final keepOn = await settings.getBool('review.keepScreenOn') ?? false;
+      final spelling = await settings.getBool('review.spellingMode') ?? false;
       if (mounted) {
         setState(() {
           _remindersEnabled = enabled;
           _keepScreenOn = keepOn;
+          _spellingMode = spelling;
         });
       }
     });
@@ -195,6 +198,15 @@ class _SettingsPageState extends State<SettingsPage> {
                   },
                   title: const Text('复习时保持屏幕常亮'),
                   subtitle: const Text('进入复习/滚动练习页期间屏幕不会自动熄灭'),
+                ),
+                SwitchListTile(
+                  value: _spellingMode,
+                  onChanged: (v) async {
+                    await context.read<SettingsRepository>().setBool('review.spellingMode', v);
+                    if (mounted) setState(() => _spellingMode = v);
+                  },
+                  title: const Text('拼写模式（听写）'),
+                  subtitle: const Text('首轮复习先看释义拼单词：拼对自动记“认识”，拼错自动进入滚动练习'),
                 ),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),

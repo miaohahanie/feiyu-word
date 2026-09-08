@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
@@ -42,6 +44,13 @@ class _ReviewPageState extends State<ReviewPage> {
   // 评分请求处理中：防止 async 期间连点按钮对同一词重复计分
   bool _submitting = false;
 
+  // 拼写模式（仅首轮）：先看释义拼单词，拼对自动评“认识”，拼错自动进滚动练习
+  bool _spellingMode = false;
+  bool _spellSubmitted = false;
+  bool _spellCorrect = false;
+  final TextEditingController _spellCtrl = TextEditingController();
+  Timer? _spellTimer;
+
   int _todayCount = 0;
   Map<int, int> _ratingCounts = {};
 
@@ -50,6 +59,37 @@ class _ReviewPageState extends State<ReviewPage> {
     super.initState();
     _load();
     _applyKeepScreenOn();
+    _loadSpellingMode();
+  }
+
+  Future<void> _loadSpellingMode() async {
+    try {
+      final settings = context.read<SettingsRepository>();
+      final on = await settings.getBool('review.spellingMode') ?? false;
+      if (mounted) setState(() => _spellingMode = on);
+    } catch (_) {}
+  }
+
+  String _normalizeSpell(String s) =>
+      s.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
+
+  void _submitSpelling() {
+    if (_spellSubmitted) return;
+    final word = _current;
+    if (word == null) return;
+    final guess = _normalizeSpell(_spellCtrl.text);
+    if (guess.isEmpty) return;
+    final correct = guess == _normalizeSpell(word.word);
+    setState(() {
+      _spellSubmitted = true;
+      _spellCorrect = correct;
+      _revealed = true;
+    });
+    _spellTimer?.cancel();
+    _spellTimer = Timer(Duration(milliseconds: correct ? 600 : 1800), () {
+      if (!mounted) return;
+      _rate(correct ? 8 : 4);
+    });
   }
 
   Future<void> _applyKeepScreenOn() async {
@@ -64,6 +104,8 @@ class _ReviewPageState extends State<ReviewPage> {
 
   @override
   void dispose() {
+    _spellTimer?.cancel();
+    _spellCtrl.dispose();
     // 无论开关状态如何都尝试恢复（enable 只在开关打开时被调用过）
     WakelockPlus.disable().catchError((_) {});
     super.dispose();
@@ -129,6 +171,9 @@ class _ReviewPageState extends State<ReviewPage> {
       _queue = _queue.skip(1).toList();
       _current = _queue.isEmpty ? null : _queue.first;
       _revealed = false;
+      _spellSubmitted = false;
+      _spellCorrect = false;
+      _spellCtrl.clear();
     });
     if (_queue.isEmpty) {
       _startRolling();
@@ -153,6 +198,8 @@ class _ReviewPageState extends State<ReviewPage> {
 
   Future<void> _rate(int rating) async {
     if (_submitting) return;
+    // 手动评分时取消拼写模式的自动评分定时器，避免双重计分
+    _spellTimer?.cancel();
     final state = context.read<AppState>();
     final settings = context.read<SettingsRepository>();
     final repo = context.read<WordRepository>();
@@ -203,7 +250,10 @@ class _ReviewPageState extends State<ReviewPage> {
     session.grade(rating);
     setState(() {
       _revealed = false;
-      if (session.finished) _phase = _Phase.done;
+      if (session.finished) {
+        _phase = _Phase.done;
+        _persistRollingSummary(session, false);
+      }
     });
   }
 
@@ -212,6 +262,20 @@ class _ReviewPageState extends State<ReviewPage> {
       _rollStoppedEarly = true;
       _phase = _Phase.done;
     });
+    final session = _rolling;
+    if (session != null) _persistRollingSummary(session, true);
+  }
+
+  /// 记录滚动练习会话（学习报告用），失败不影响主流程
+  Future<void> _persistRollingSummary(RollingSession session, bool stoppedEarly) async {
+    try {
+      final repo = context.read<WordRepository>();
+      await repo.saveRollingSession(
+        words: session.totalWords,
+        rounds: session.round,
+        stoppedEarly: stoppedEarly,
+      );
+    } catch (_) {}
   }
 
   @override
@@ -333,6 +397,8 @@ class _ReviewPageState extends State<ReviewPage> {
   Widget _buildCard({bool rolling = false}) {
     final word = rolling ? _rolling!.current! : _current!;
     final example = word.examples.isNotEmpty ? word.examples.first : null;
+    // 拼写模式只在首轮生效；提交后自动展示原词与对错
+    final spellingActive = _spellingMode && !rolling && !_revealed;
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -365,21 +431,63 @@ class _ReviewPageState extends State<ReviewPage> {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Text(word.word,
-                        style: const TextStyle(fontSize: 40, fontWeight: FontWeight.bold)),
-                    if (word.phonetic.isNotEmpty) ...[
-                      const SizedBox(height: 8),
-                      Text(word.phonetic, style: const TextStyle(fontSize: 18, color: Colors.grey)),
-                    ],
-                    if (example != null) ...[
-                      const SizedBox(height: 12),
-                      Text(example.text, textAlign: TextAlign.center),
-                      if (example.translation.isNotEmpty)
-                        Text(example.translation,
-                            textAlign: TextAlign.center, style: const TextStyle(color: Colors.grey)),
+                    // 拼写模式提交前：只给释义/音标，不给单词与例句（例句含原词会泄底）
+                    if (spellingActive) ...[
+                      Text(word.meaning,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                      if (word.phonetic.isNotEmpty) ...[
+                        const SizedBox(height: 8),
+                        Text(word.phonetic, style: const TextStyle(fontSize: 16, color: Colors.grey)),
+                      ],
+                      const SizedBox(height: 16),
+                      TextField(
+                        controller: _spellCtrl,
+                        enabled: !_spellSubmitted,
+                        autofocus: true,
+                        textAlign: TextAlign.center,
+                        decoration: const InputDecoration(
+                          labelText: '输入英文单词',
+                          border: OutlineInputBorder(),
+                        ),
+                        onSubmitted: (_) => _submitSpelling(),
+                      ),
+                      if (!_spellSubmitted) ...[
+                        const SizedBox(height: 8),
+                        FilledButton(
+                          onPressed: _submitSpelling,
+                          child: const Text('提交拼写'),
+                        ),
+                      ],
+                    ] else ...[
+                      Text(word.word,
+                          style: const TextStyle(fontSize: 40, fontWeight: FontWeight.bold)),
+                      if (word.phonetic.isNotEmpty) ...[
+                        const SizedBox(height: 8),
+                        Text(word.phonetic, style: const TextStyle(fontSize: 18, color: Colors.grey)),
+                      ],
+                      if (example != null) ...[
+                        const SizedBox(height: 12),
+                        Text(example.text, textAlign: TextAlign.center),
+                        if (example.translation.isNotEmpty)
+                          Text(example.translation,
+                              textAlign: TextAlign.center, style: const TextStyle(color: Colors.grey)),
+                      ],
                     ],
                     const SizedBox(height: 24),
-                    if (_revealed)
+                    if (spellingActive)
+                      const SizedBox.shrink()
+                    else if (_spellSubmitted)
+                      Text(
+                        _spellCorrect ? '✓ 拼写正确' : '✗ 正确拼写：${word.word}',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: _spellCorrect ? Colors.green : Colors.redAccent,
+                        ),
+                      )
+                    else if (_revealed)
                       Text(word.meaning,
                           textAlign: TextAlign.center,
                           style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold))
@@ -395,45 +503,46 @@ class _ReviewPageState extends State<ReviewPage> {
             ),
           ),
           const SizedBox(height: 8),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: _submitting
-                      ? null
-                      : () => rolling
-                          ? _gradeRoll(1)
-                          : _rate(1),
-                  child: const Text('不认识'),
+          if (!spellingActive)
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: _submitting
+                        ? null
+                        : () => rolling
+                            ? _gradeRoll(1)
+                            : _rate(1),
+                    child: const Text('不认识'),
+                  ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: _submitting
-                      ? null
-                      : () => rolling
-                          ? _gradeRoll(4)
-                          : _rate(4),
-                  child: const Text('模糊'),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: _submitting
+                        ? null
+                        : () => rolling
+                            ? _gradeRoll(4)
+                            : _rate(4),
+                    child: const Text('模糊'),
+                  ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: FilledButton(
-                  onPressed: _submitting
-                      ? null
-                      : () => rolling
-                          ? _gradeRoll(8)
-                          : _rate(8),
-                  child: const Text('认识'),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: FilledButton(
+                    onPressed: _submitting
+                        ? null
+                        : () => rolling
+                            ? _gradeRoll(8)
+                            : _rate(8),
+                    child: const Text('认识'),
+                  ),
                 ),
-              ),
-            ],
-          ),
+              ],
+            ),
           const SizedBox(height: 8),
           TextButton(
-            onPressed: _submitting
+            onPressed: _spellSubmitted
                 ? null
                 : () => rolling ? _gradeRoll(0) : _skip(),
             child: Text(rolling ? '跳过（下一轮再来）' : '跳过（30 分钟后）'),

@@ -13,7 +13,7 @@ class AppDatabase {
     final dbPath = p.join(databasesPath, 'word_pet_mobile.db');
     _db = await openDatabase(
       dbPath,
-      version: 2,
+      version: 3,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -24,6 +24,19 @@ class AppDatabase {
     if (oldVersion < 2) {
       // 新增本地复习历史，用于“最近 3 次高分且间隔>=21天”的已掌握判断
       await db.execute("ALTER TABLE words ADD COLUMN historyJson TEXT DEFAULT '[]'");
+    }
+    if (oldVersion < 3) {
+      // 滚动练习记录，供学习报告统计
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS rolling_sessions (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          day TEXT NOT NULL,
+          words INTEGER NOT NULL,
+          rounds INTEGER NOT NULL,
+          stoppedEarly INTEGER NOT NULL DEFAULT 0,
+          createdAt INTEGER NOT NULL
+        )
+      ''');
     }
   }
 
@@ -71,6 +84,17 @@ class AppDatabase {
         rating INTEGER NOT NULL,
         createdAt INTEGER NOT NULL,
         synced INTEGER DEFAULT 0
+      )
+    ''');
+
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS rolling_sessions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        day TEXT NOT NULL,
+        words INTEGER NOT NULL,
+        rounds INTEGER NOT NULL,
+        stoppedEarly INTEGER NOT NULL DEFAULT 0,
+        createdAt INTEGER NOT NULL
       )
     ''');
 

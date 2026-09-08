@@ -487,6 +487,35 @@ ipcMain.handle('load-data', () => getData());
 
 ipcMain.handle('save-data', (event, data) => withDataLock(() => saveData(data)));
 
+// 恢复备份：校验 → 暂停同步服务 → 原子写回 → 重启服务 → 通知渲染层重载
+ipcMain.handle('restore-backup', async (event, backup) => {
+  try {
+    if (
+      !backup ||
+      backup.type !== 'word-pet-backup' ||
+      !backup.data ||
+      typeof backup.data !== 'object' ||
+      !Array.isArray(backup.data.books)
+    ) {
+      return { ok: false, error: '备份文件格式不正确' };
+    }
+    const wasEnabled = syncStore ? syncStore.getServerConfig().enabled : false;
+    if (wasEnabled && syncServer) {
+      try { await syncServer.stop(); } catch (e) { /* 停不掉也要继续恢复 */ }
+    }
+    await withDataLock(async () => {
+      saveData(backup.data);
+    });
+    if (wasEnabled && syncServer) {
+      try { await syncServer.start(); } catch (e) { /* 设置页会展示启动错误 */ }
+    }
+    if (win && !win.isDestroyed()) win.webContents.send('sync-data-updated');
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: String((e && e.message) || e) };
+  }
+});
+
 ipcMain.handle('window-hide', () => {
   if (win) { win.hide(); return true; }
   return false;
