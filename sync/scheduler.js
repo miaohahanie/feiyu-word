@@ -83,6 +83,9 @@ function rateWord(word, rating, now, eventId) {
     word.mastered = false;
   }
 
+  // history 截断到最近 200 条，防止长期使用后无限膨胀（与 renderer/scheduler.js 一致）
+  if (word.history.length > 200) word.history = word.history.slice(-200);
+
   return word;
 }
 

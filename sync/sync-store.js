@@ -1,6 +1,9 @@
 /**
  * 手机同步的独立配置存储（word-pet-sync.json）。
  * 与 word-pet-data.json 分离，避免渲染进程保存数据时把设备/配对信息覆盖掉。
+ *
+ * 写入策略：临时文件 + rename 原子替换，保留 .bak；
+ * 主文件损坏时自动尝试从 .bak 恢复，损坏文件隔离保存。
  */
 'use strict';
 
@@ -20,25 +23,49 @@ const DEFAULT_CONFIG = {
   tombstones: []
 };
 
+// 墓碑保留时长：超过后裁剪，防止无限增长。
+// 手机离线超过该时长可能无法感知更早的删除，属于可接受取舍。
+const TOMBSTONE_TTL = 90 * 24 * 60 * 60 * 1000;
+const MAX_PAIR_FAILS = 5;
+
 function createSyncStore(filePath) {
-  let config = JSON.parse(JSON.stringify(DEFAULT_CONFIG));
-  try {
-    const raw = fs.readFileSync(filePath, 'utf8');
-    const parsed = JSON.parse(raw);
-    if (parsed && typeof parsed === 'object') {
-      config = Object.assign(JSON.parse(JSON.stringify(DEFAULT_CONFIG)), parsed);
-      if (!config.devices) config.devices = [];
-      if (!config.tombstones) config.tombstones = [];
-      if (!config.server) config.server = JSON.parse(JSON.stringify(DEFAULT_CONFIG.server));
+  let pairFails = 0;
+  let config = loadConfig();
+
+  function loadConfig() {
+    const candidates = [filePath, filePath + '.bak'];
+    for (const p of candidates) {
+      try {
+        if (!fs.existsSync(p)) continue;
+        const parsed = JSON.parse(fs.readFileSync(p, 'utf8'));
+        if (parsed && typeof parsed === 'object') {
+          if (p !== filePath) {
+            try { fs.copyFileSync(p, filePath); } catch (e) { /* 恢复失败则用内存默认值 */ }
+          }
+          const cfg = Object.assign(JSON.parse(JSON.stringify(DEFAULT_CONFIG)), parsed);
+          if (!Array.isArray(cfg.devices)) cfg.devices = [];
+          if (!Array.isArray(cfg.tombstones)) cfg.tombstones = [];
+          if (!cfg.server) cfg.server = JSON.parse(JSON.stringify(DEFAULT_CONFIG.server));
+          return cfg;
+        }
+      } catch (e) {
+        if (p === filePath) {
+          try { fs.renameSync(filePath, filePath + '.corrupt-' + Date.now()); } catch (e2) { /* ignore */ }
+        }
+      }
     }
-  } catch (e) {
-    /* 首次运行/文件损坏时用默认值 */
+    return JSON.parse(JSON.stringify(DEFAULT_CONFIG));
   }
 
   function save() {
     try {
       fs.mkdirSync(path.dirname(filePath), { recursive: true });
-      fs.writeFileSync(filePath, JSON.stringify(config, null, 2), 'utf8');
+      const tmp = filePath + '.tmp';
+      fs.writeFileSync(tmp, JSON.stringify(config, null, 2), 'utf8');
+      try {
+        if (fs.existsSync(filePath)) fs.copyFileSync(filePath, filePath + '.bak');
+      } catch (e) { /* 备份失败不阻塞写入 */ }
+      fs.renameSync(tmp, filePath);
       return true;
     } catch (e) {
       return false;
@@ -54,11 +81,11 @@ function createSyncStore(filePath) {
   }
 
   function genCode() {
-    const code = String(Math.floor(100000 + Math.random() * 900000));
-    config.server.pairingCode = code;
+    config.server.pairingCode = String(crypto.randomInt(100000, 1000000));
     config.server.codeExpiresAt = Date.now() + 10 * 60 * 1000; // 10 分钟
+    pairFails = 0;
     save();
-    return code;
+    return config.server.pairingCode;
   }
 
   function ensureCode() {
@@ -68,18 +95,33 @@ function createSyncStore(filePath) {
     return config.server.pairingCode;
   }
 
-  function pair(code) {
+  function pair(code, name) {
     const c = String(code || '').trim();
-    if (!c || c !== config.server.pairingCode || config.server.codeExpiresAt < Date.now()) return null;
+    const valid =
+      c && c === config.server.pairingCode && config.server.codeExpiresAt >= Date.now();
+    if (!valid) {
+      pairFails += 1;
+      if (pairFails >= MAX_PAIR_FAILS) {
+        // 连续失败太多次：作废当前码并换新码，桌面端状态刷新后会展示新码
+        genCode();
+      }
+      return null;
+    }
+    pairFails = 0;
     const deviceId = crypto.randomUUID();
     const token = makeToken();
+    const cleanName =
+      String(name || '').trim().replace(/[\r\n\t]/g, '').slice(0, 40) || 'Android 手机';
     config.devices.push({
       deviceId,
-      name: 'Android 手机',
+      name: cleanName,
       tokenHash: hashToken(token),
       pairedAt: Date.now(),
       lastSyncAt: 0
     });
+    // 配对码一次性：成功即作废，防止旧码重放
+    config.server.pairingCode = '';
+    config.server.codeExpiresAt = 0;
     save();
     return { deviceId, token };
   }
@@ -113,13 +155,48 @@ function createSyncStore(filePath) {
     }
   }
 
+  function pruneTombstones() {
+    const cutoff = Date.now() - TOMBSTONE_TTL;
+    if (config.tombstones.some((t) => (t.deletedAt || 0) <= cutoff)) {
+      config.tombstones = config.tombstones.filter((t) => (t.deletedAt || 0) > cutoff);
+      return true;
+    }
+    return false;
+  }
+
+  function addTombstones(bookId, words) {
+    const keys = (Array.isArray(words) ? words : [words])
+      .map((w) => String(w || '').toLowerCase().trim())
+      .filter((k) => k);
+    if (!bookId || !keys.length) return false;
+    const existing = new Set(
+      config.tombstones.filter((t) => t.bookId === bookId).map((t) => t.word)
+    );
+    const now = Date.now();
+    let changed = false;
+    for (const key of keys) {
+      if (existing.has(key)) continue;
+      config.tombstones.push({ bookId, word: key, deletedAt: now });
+      existing.add(key);
+      changed = true;
+    }
+    if (changed || pruneTombstones()) save();
+    return changed;
+  }
+
   function addTombstone(bookId, word) {
+    return addTombstones(bookId, [word]);
+  }
+
+  // 重新添加单词时清除对应墓碑，否则手机端会把新词误删（拉取后按墓碑过滤）
+  function removeTombstone(bookId, word) {
     const key = String(word || '').toLowerCase().trim();
     if (!bookId || !key) return;
-    if (!config.tombstones.some((t) => t.bookId === bookId && t.word === key)) {
-      config.tombstones.push({ bookId, word: key, deletedAt: Date.now() });
-      save();
-    }
+    const before = config.tombstones.length;
+    config.tombstones = config.tombstones.filter(
+      (t) => !(t.bookId === bookId && t.word === key)
+    );
+    if (config.tombstones.length !== before) save();
   }
 
   function getTombstones(bookId, since) {
@@ -161,6 +238,8 @@ function createSyncStore(filePath) {
     removeDevice,
     touchDevice,
     addTombstone,
+    addTombstones,
+    removeTombstone,
     getTombstones,
     getServerConfig,
     setServerEnabled,

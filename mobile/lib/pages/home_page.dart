@@ -84,7 +84,19 @@ class _HomePageState extends State<HomePage> {
               title: Text(state.syncing ? '同步中…' : '同步'),
               subtitle: Text(state.lastMessage.isEmpty ? '与电脑端同步词库与复习进度' : state.lastMessage),
               onTap: () async {
+                if (state.syncing) return; // 同步进行中忽略重复点击
                 await state.syncNow();
+                _loadDue();
+              },
+            ),
+          ),
+          Card(
+            child: ListTile(
+              leading: const Icon(Icons.menu_book),
+              title: const Text('单词本'),
+              subtitle: const Text('查看 / 搜索 / 编辑 / 删除当前词本单词'),
+              onTap: () async {
+                await Navigator.pushNamed(context, '/words');
                 _loadDue();
               },
             ),

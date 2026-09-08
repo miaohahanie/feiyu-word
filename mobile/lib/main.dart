@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:workmanager/workmanager.dart';
 
 import 'app.dart';
 import 'app_state.dart';
@@ -8,6 +9,7 @@ import 'data/settings_repository.dart';
 import 'data/word_repository.dart';
 import 'notifications/notification_service.dart';
 import 'notifications/reminder_scheduler.dart';
+import 'notifications/reminder_worker.dart';
 import 'sync/pairing_service.dart';
 
 Future<void> main() async {
@@ -23,6 +25,7 @@ Future<void> main() async {
   // 通知权限与每日复习提醒（默认开启，失败不影响 App 启动）
   try {
     await NotificationService.init();
+    await Workmanager().initialize(callbackDispatcher);
     final remindersEnabled = await settings.getBool('reminders.enabled') ?? true;
     if (remindersEnabled) {
       final granted = await NotificationService.requestPermission();

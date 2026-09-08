@@ -83,6 +83,8 @@ function rateWord(word, rating) {
 
   word.lastRating = r;
   word.history.push({ date: new Date().toISOString(), rating: r });
+  // history 截断到最近 200 条，防止长期使用后无限膨胀
+  if (word.history.length > 200) word.history = word.history.slice(-200);
 
   // "已掌握"：连续 3 次自评 >= 8 且当前间隔 >= 21 天
   const recentHigh = word.history.slice(-3).filter((h) => h.rating >= 8).length;

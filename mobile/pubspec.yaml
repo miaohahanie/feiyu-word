@@ -14,18 +14,17 @@ dependencies:
   # 本地 SQLite 词库
   sqflite: ^2.3.3
   path: ^1.9.0
-  path_provider: ^2.1.3
   # 轻量状态管理
   provider: ^6.1.2
   # 二维码扫码配对
   mobile_scanner: ^5.2.3
   # 事件/设备 ID
   uuid: ^4.4.0
-  # 日期格式化
-  intl: ^0.19.0
   # 本地通知（每 2 小时复习提醒）
   flutter_local_notifications: ^17.2.1
   timezone: ^0.9.4
+  # 后台定时任务：动态计算“本轮 N 个词到期”
+  workmanager: ^0.5.2
 
 dev_dependencies:
   flutter_test:

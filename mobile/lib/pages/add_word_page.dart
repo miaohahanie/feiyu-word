@@ -66,15 +66,14 @@ class _AddWordPageState extends State<AddWordPage> {
         _meaningCtrl.text = result.meaning;
         _phoneticCtrl.text = result.phonetic;
         _message = '已查到释义，请确认后点击“添加”（来源：${result.source}）';
-        _busy = false;
       });
     } catch (e) {
       if (mounted) {
-        setState(() {
-          _busy = false;
-          _message = '查词失败：$e\n可手动填写释义后再添加';
-        });
+        setState(() => _message = '查词失败：$e\n可手动填写释义后再添加');
       }
+    } finally {
+      // 未选词本等提前返回也要复位，否则按钮永久禁用
+      if (mounted) setState(() => _busy = false);
     }
   }
 
@@ -103,10 +102,7 @@ class _AddWordPageState extends State<AddWordPage> {
         phonetic: _phoneticCtrl.text.trim().isEmpty ? null : _phoneticCtrl.text.trim(),
       );
       if (!mounted) return;
-      setState(() {
-        _busy = false;
-        _message = '已添加：${saved.word}';
-      });
+      setState(() => _message = '已添加：${saved.word}');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('已添加「${saved.word}」到词本')),
       );
@@ -116,11 +112,10 @@ class _AddWordPageState extends State<AddWordPage> {
       }
     } catch (e) {
       if (mounted) {
-        setState(() {
-          _busy = false;
-          _message = '添加失败：$e';
-        });
+        setState(() => _message = '添加失败：$e');
       }
+    } finally {
+      if (mounted) setState(() => _busy = false);
     }
   }
 

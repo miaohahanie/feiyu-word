@@ -7,6 +7,7 @@
 
 const http = require('http');
 const os = require('os');
+const net = require('net');
 const crypto = require('crypto');
 const { rateWord } = require('./scheduler');
 const { buildPairUrl, makePairQrDataUrl } = require('./qr');
@@ -57,12 +58,31 @@ function getLanIPs() {
   return listNetworks().map((n) => n.address);
 }
 
+// 防止 DNS rebinding / 浏览器跨源直连：Host 必须是 IP 字面量或 localhost
+function hostAllowed(hostHeader) {
+  if (!hostHeader) return false;
+  let h = String(hostHeader).trim().toLowerCase();
+  const bracket = h.lastIndexOf(']');
+  const colon = h.lastIndexOf(':');
+  if (colon > bracket) h = h.slice(0, colon);
+  h = h.replace(/^\[/, '').replace(/\]$/, '');
+  if (!h) return false;
+  if (h === 'localhost' || h.endsWith('.localhost')) return true;
+  return net.isIP(h) !== 0;
+}
+
 function wordToSync(w) {
   return {
     word: w.word,
     meaning: w.meaning || '',
     phonetic: w.phonetic || '',
     examples: Array.isArray(w.examples) ? w.examples : [],
+    // 附带最近 history（含事件 id），手机端被覆盖后仍能做“最近 3 次高分”判定与幂等去重
+    history: (Array.isArray(w.history) ? w.history : []).slice(-20).map((h) => ({
+      id: (h && h.id) || null,
+      date: (h && h.date) || '',
+      rating: Number(h && h.rating) || 0
+    })),
     reps: Number(w.reps) || 0,
     ease: Number(w.ease) > 0 ? Number(w.ease) : 2.5,
     interval: Number(w.interval) || 0,
@@ -121,25 +141,29 @@ function applyEvents(data, bookId, events) {
   return { accepted, ignored, changedWords };
 }
 
-function createSyncServer({ store, getData, saveData, lookupWord, notifyDataChanged }) {
+function createSyncServer({ store, getData, saveData, lookupWord, notifyDataChanged, withDataLock, appVersion }) {
   let server = null;
   let activePort = 0;
   let lastError = '';
 
   function parseBody(req) {
     return new Promise((resolve, reject) => {
-      let body = '';
+      const chunks = [];
+      let size = 0;
       req.on('data', (chunk) => {
-        body += chunk;
-        if (body.length > 5 * 1024 * 1024) {
+        size += chunk.length;
+        if (size > 5 * 1024 * 1024) {
           reject(new Error('请求体过大'));
           req.destroy();
+          return;
         }
+        chunks.push(chunk);
       });
       req.on('end', () => {
-        if (!body) return resolve({});
+        if (!chunks.length) return resolve({});
         try {
-          resolve(JSON.parse(body));
+          // 先按字节收集再统一解码，避免多字节 UTF-8 字符跨 chunk 被截断成乱码
+          resolve(JSON.parse(Buffer.concat(chunks).toString('utf8')));
         } catch (e) {
           reject(new Error('无效 JSON'));
         }
@@ -150,10 +174,8 @@ function createSyncServer({ store, getData, saveData, lookupWord, notifyDataChan
 
   function sendJson(res, status, obj) {
     res.writeHead(status, {
-      'Content-Type': 'application/json; charset=utf-8',
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization, Device-Id',
-      'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS'
+      'Content-Type': 'application/json; charset=utf-8'
+      // 刻意不带 CORS 头：客户端是原生 App，开放 CORS 只会让任意网页能访问本服务
     });
     res.end(JSON.stringify(obj));
   }
@@ -181,167 +203,198 @@ function createSyncServer({ store, getData, saveData, lookupWord, notifyDataChan
     const url = new URL(req.url || '/', 'http://127.0.0.1');
     const pathname = url.pathname;
 
-    if (req.method === 'OPTIONS') {
-      res.writeHead(204, {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Headers': 'Content-Type, Authorization, Device-Id',
-        'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS'
-      });
-      return res.end();
+    if (!hostAllowed(req.headers.host)) {
+      return sendJson(res, 403, { error: '拒绝访问' });
     }
 
     try {
-      // 健康检查（无需鉴权）
-      if (pathname === '/api/health' && req.method === 'GET') {
-        return sendJson(res, 200, { ok: true, appVersion: '0.3.2+M1', serverTime: Date.now() });
-      }
-
-      // 配对
-      if (pathname === '/api/pair' && req.method === 'POST') {
-        const body = await parseBody(req);
-        const paired = store.pair(body && body.code);
-        if (!paired) {
-          return sendJson(res, 401, { error: '配对码无效或已过期' });
+      // 整个请求处理与渲染进程的数据保存互斥（withDataLock），
+      // 避免在线查词等待期间数据被渲染进程旧快照覆盖。
+      const run = typeof withDataLock === 'function' ? withDataLock : (fn) => Promise.resolve(fn());
+      return await run(async () => {
+        // 健康检查（无需鉴权）
+        if (pathname === '/api/health' && req.method === 'GET') {
+          return sendJson(res, 200, { ok: true, appVersion: appVersion || '', serverTime: Date.now() });
         }
-        return sendJson(res, 200, {
-          deviceId: paired.deviceId,
-          token: paired.token,
-          serverTime: Date.now(),
-          books: bookList()
-        });
-      }
 
-      // 以下接口均需鉴权
-      const device = auth(req);
-      if (!device) {
-        return sendJson(res, 401, { error: '未授权设备' });
-      }
+        // 配对（失败限速、一次性码由 store 实现）
+        if (pathname === '/api/pair' && req.method === 'POST') {
+          const body = await parseBody(req);
+          const paired = store.pair(body && body.code, body && body.name);
+          if (!paired) {
+            return sendJson(res, 401, { error: '配对码无效或已过期' });
+          }
+          return sendJson(res, 200, {
+            deviceId: paired.deviceId,
+            token: paired.token,
+            serverTime: Date.now(),
+            books: bookList()
+          });
+        }
 
-      if (pathname === '/api/books' && req.method === 'GET') {
-        store.touchDevice(device.deviceId);
-        return sendJson(res, 200, { serverTime: Date.now(), books: bookList() });
-      }
+        // 以下接口均需鉴权
+        const device = auth(req);
+        if (!device) {
+          return sendJson(res, 401, { error: '未授权设备' });
+        }
 
-      if (pathname === '/api/sync' && req.method === 'GET') {
-        const bookId = url.searchParams.get('book') || '';
-        const since = Number(url.searchParams.get('since') || 0) || 0;
-        const data = getData() || { books: [] };
-        const book = data.books.find((b) => b.id === bookId);
-        if (!book) return sendJson(res, 404, { error: '词本不存在' });
-        const words = (book.words || [])
-          .map(wordToSync)
-          .filter((w) => since <= 0 || w.updatedAt > since || w.deleted);
-        const tombstones = store.getTombstones(bookId, since);
-        store.touchDevice(device.deviceId);
-        return sendJson(res, 200, {
-          serverTime: Date.now(),
-          book: { id: book.id, name: book.name || '' },
-          words,
-          tombstones
-        });
-      }
+        if (pathname === '/api/books' && req.method === 'GET') {
+          store.touchDevice(device.deviceId);
+          return sendJson(res, 200, { serverTime: Date.now(), books: bookList() });
+        }
 
-      if (pathname === '/api/sync' && req.method === 'POST') {
-        const body = await parseBody(req);
-        const data = getData() || { books: [], stats: { days: {} } };
-        const result = applyEvents(data, body.bookId || '', body.events || []);
-        if (result.accepted > 0) {
+        if (pathname === '/api/sync' && req.method === 'GET') {
+          const bookId = url.searchParams.get('book') || '';
+          const sinceRaw = url.searchParams.get('since');
+          const since = Number(sinceRaw || 0);
+          if (sinceRaw !== null && (!Number.isFinite(since) || since < 0)) {
+            return sendJson(res, 400, { error: 'since 参数无效' });
+          }
+          const data = getData() || { books: [] };
+          const book = data.books.find((b) => b.id === bookId);
+          if (!book) return sendJson(res, 404, { error: '词本不存在' });
+          const words = (book.words || [])
+            .map(wordToSync)
+            .filter((w) => since <= 0 || w.updatedAt > since || w.deleted);
+          const tombstones = store.getTombstones(bookId, since);
+          store.touchDevice(device.deviceId);
+          return sendJson(res, 200, {
+            serverTime: Date.now(),
+            book: { id: book.id, name: book.name || '' },
+            words,
+            tombstones
+          });
+        }
+
+        if (pathname === '/api/sync' && req.method === 'POST') {
+          const body = await parseBody(req);
+          const data = getData() || { books: [], stats: { days: {} } };
+          const result = applyEvents(data, body.bookId || '', body.events || []);
+          if (result.accepted > 0) {
+            saveData(data);
+            store.touchDevice(device.deviceId);
+            if (typeof notifyDataChanged === 'function') notifyDataChanged();
+          }
+          return sendJson(res, 200, {
+            serverTime: Date.now(),
+            accepted: result.accepted,
+            ignored: result.ignored,
+            conflicts: [],
+            changedWords: result.changedWords
+          });
+        }
+
+        // 手机端在线查词
+        if (pathname === '/api/lookup' && req.method === 'POST') {
+          const body = await parseBody(req);
+          const word = String(body.word || '').trim();
+          if (!word) return sendJson(res, 400, { error: '缺少单词' });
+          const result = typeof lookupWord === 'function' ? await lookupWord(word) : null;
+          if (!result || !result.meaning) return sendJson(res, 404, { error: '未找到释义' });
+          return sendJson(res, 200, {
+            ok: true,
+            word: word.toLowerCase(),
+            meaning: result.meaning,
+            phonetic: result.phonetic || '',
+            source: result.source || ''
+          });
+        }
+
+        // 手机端添加单词（可带释义，缺释义时在线查）
+        if (pathname === '/api/word' && req.method === 'POST') {
+          const body = await parseBody(req);
+          const bookId = String(body.bookId || '').trim();
+          const key = String(body.word || '').trim().toLowerCase();
+          if (!bookId || !key) {
+            return sendJson(res, 400, { error: '词本或单词不能为空' });
+          }
+          const data = getData() || { books: [], stats: { days: {} }, settings: {} };
+          const book = data.books.find((b) => b.id === bookId);
+          if (!book) return sendJson(res, 404, { error: '词本不存在' });
+          if (!Array.isArray(book.words)) book.words = [];
+
+          const existing = book.words.find((w) => String(w.word || '').toLowerCase() === key);
+          // 格式校验只拦新增：编辑已有词（如 COVID-19、naïve）不应被 400
+          if (!existing && !/^[a-zA-Z][a-zA-Z\-' ]*$/.test(key)) {
+            return sendJson(res, 400, { error: '单词格式不正确' });
+          }
+          let meaning = String(body.meaning || '').trim();
+          let phonetic = String(body.phonetic || '').trim();
+          if (!meaning && typeof lookupWord === 'function') {
+            const r = await lookupWord(key);
+            if (r && r.meaning) {
+              meaning = r.meaning;
+              if (!phonetic) phonetic = r.phonetic || '';
+            }
+          }
+          if (!meaning) {
+            return sendJson(res, 400, { error: '缺少释义，且在线查词失败，请手动补充中文释义' });
+          }
+
+          let w = existing;
+          if (w) {
+            w.meaning = meaning;
+            if (phonetic) w.phonetic = phonetic;
+            w.updatedAt = Date.now();
+          } else {
+            w = {
+              id: 'w' + Date.now().toString(36) + crypto.randomBytes(4).toString('hex'),
+              word: key,
+              meaning,
+              phonetic,
+              examples: [],
+              tags: [],
+              createdAt: Date.now(),
+              updatedAt: Date.now(),
+              mastered: false,
+              reps: 0,
+              ease: 2.5,
+              interval: 0,
+              lapses: 0,
+              history: [],
+              lastRating: null,
+              nextReview: Date.now() + ((data.settings && data.settings.firstReviewDelayMin) || 60) * 60 * 1000
+            };
+            book.words.unshift(w);
+          }
+          // 重加词条时清掉旧墓碑，否则手机端会把刚拉下来的词误删
+          store.removeTombstone(bookId, key);
           saveData(data);
           store.touchDevice(device.deviceId);
           if (typeof notifyDataChanged === 'function') notifyDataChanged();
+          return sendJson(res, 200, { ok: true, word: wordToSync(w) });
         }
-        return sendJson(res, 200, {
-          serverTime: Date.now(),
-          accepted: result.accepted,
-          ignored: result.ignored,
-          conflicts: [],
-          changedWords: result.changedWords
-        });
-      }
 
-      // 手机端在线查词
-      if (pathname === '/api/lookup' && req.method === 'POST') {
-        const body = await parseBody(req);
-        const word = String(body.word || '').trim();
-        if (!word) return sendJson(res, 400, { error: '缺少单词' });
-        const result = typeof lookupWord === 'function' ? await lookupWord(word) : null;
-        if (!result || !result.meaning) return sendJson(res, 404, { error: '未找到释义' });
-        return sendJson(res, 200, {
-          ok: true,
-          word: word.toLowerCase(),
-          meaning: result.meaning,
-          phonetic: result.phonetic || '',
-          source: result.source || ''
-        });
-      }
-
-      // 手机端添加单词（可带释义，缺释义时在线查）
-      if (pathname === '/api/word' && req.method === 'POST') {
-        const body = await parseBody(req);
-        const bookId = String(body.bookId || '').trim();
-        const key = String(body.word || '').trim().toLowerCase();
-        if (!bookId || !key || !/^[a-zA-Z][a-zA-Z\-' ]*$/.test(key)) {
-          return sendJson(res, 400, { error: '词本或单词格式不正确' });
-        }
-        const data = getData() || { books: [], stats: { days: {} }, settings: {} };
-        const book = data.books.find((b) => b.id === bookId);
-        if (!book) return sendJson(res, 404, { error: '词本不存在' });
-        if (!Array.isArray(book.words)) book.words = [];
-
-        const existing = book.words.find((w) => String(w.word || '').toLowerCase() === key);
-        let meaning = String(body.meaning || '').trim();
-        let phonetic = String(body.phonetic || '').trim();
-        if (!meaning && typeof lookupWord === 'function') {
-          const r = await lookupWord(key);
-          if (r && r.meaning) {
-            meaning = r.meaning;
-            if (!phonetic) phonetic = r.phonetic || '';
+        if (pathname === '/api/word' && req.method === 'DELETE') {
+          const bookId = url.searchParams.get('book') || '';
+          const word = String(url.searchParams.get('word') || '').toLowerCase().trim();
+          if (!bookId || !word) return sendJson(res, 400, { error: '缺少 book / word 参数' });
+          const data = getData() || { books: [], stats: { days: {} } };
+          const book = data.books.find((b) => b.id === bookId);
+          if (!book || !Array.isArray(book.words)) return sendJson(res, 404, { error: '词本不存在' });
+          const idx = book.words.findIndex((w) => String(w.word || '').toLowerCase() === word);
+          if (idx >= 0) {
+            book.words.splice(idx, 1);
+            store.addTombstone(bookId, word);
+            saveData(data);
+            store.touchDevice(device.deviceId);
+            if (typeof notifyDataChanged === 'function') notifyDataChanged();
           }
-        }
-        if (!meaning) {
-          return sendJson(res, 400, { error: '缺少释义，且在线查词失败，请手动补充中文释义' });
+          return sendJson(res, 200, { ok: true });
         }
 
-        let w = existing;
-        if (w) {
-          w.meaning = meaning;
-          if (phonetic) w.phonetic = phonetic;
-          w.updatedAt = Date.now();
-        } else {
-          w = {
-            id: 'w' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
-            word: key,
-            meaning,
-            phonetic,
-            examples: [],
-            tags: [],
-            createdAt: Date.now(),
-            updatedAt: Date.now(),
-            mastered: false,
-            reps: 0,
-            ease: 2.5,
-            interval: 0,
-            lapses: 0,
-            history: [],
-            lastRating: null,
-            nextReview: Date.now() + ((data.settings && data.settings.firstReviewDelayMin) || 60) * 60 * 1000
-          };
-          book.words.unshift(w);
+        // 删除配对设备：HTTP 只允许设备删除自己；移除其他设备请走桌面端设置页
+        const m = pathname.match(/^\/api\/device\/([\w-]+)$/);
+        if (m && req.method === 'DELETE') {
+          if (m[1] !== device.deviceId) {
+            return sendJson(res, 403, { error: '只能删除本设备' });
+          }
+          store.removeDevice(m[1]);
+          return sendJson(res, 200, { ok: true });
         }
-        saveData(data);
-        store.touchDevice(device.deviceId);
-        if (typeof notifyDataChanged === 'function') notifyDataChanged();
-        return sendJson(res, 200, { ok: true, word: wordToSync(w) });
-      }
 
-      // 删除配对设备（同一设备 token 或任意已授权设备均可删除）
-      const m = pathname.match(/^\/api\/device\/([\w-]+)$/);
-      if (m && req.method === 'DELETE') {
-        store.removeDevice(m[1]);
-        return sendJson(res, 200, { ok: true });
-      }
-
-      return sendJson(res, 404, { error: '接口不存在' });
+        return sendJson(res, 404, { error: '接口不存在' });
+      });
     } catch (e) {
       return sendJson(res, 500, { error: String((e && e.message) || e) });
     }
@@ -381,7 +434,26 @@ function createSyncServer({ store, getData, saveData, lookupWord, notifyDataChan
       server = null;
       activePort = 0;
       store.setServerEnabled(false);
-      srv.close(() => resolve(getStatus()));
+      let settled = false;
+      const done = () => {
+        if (settled) return;
+        settled = true;
+        resolve(getStatus());
+      };
+      // 手机端 http 包默认 keep-alive，close() 会一直等连接；
+      // 先关空闲连接，再兜底强制断开，保证退出不被挂起。
+      if (typeof srv.closeIdleConnections === 'function') srv.closeIdleConnections();
+      const forceTimer = setTimeout(() => {
+        try {
+          if (typeof srv.closeAllConnections === 'function') srv.closeAllConnections();
+        } catch (e) { /* ignore */ }
+        setTimeout(done, 200);
+      }, 2000);
+      if (typeof forceTimer.unref === 'function') forceTimer.unref();
+      srv.close(() => {
+        clearTimeout(forceTimer);
+        done();
+      });
     });
   }
 

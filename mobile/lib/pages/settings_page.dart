@@ -45,6 +45,8 @@ class _SettingsPageState extends State<SettingsPage> {
     if (value) {
       final ok = await NotificationService.requestPermission();
       if (!ok) {
+        // 权限被拒也要落库，否则下次启动会按默认值再次请求并调度
+        await settings.setBool('reminders.enabled', false);
         if (mounted) {
           setState(() => _remindersEnabled = false);
           setState(() => _message = '通知权限未授予，请在系统设置中开启');

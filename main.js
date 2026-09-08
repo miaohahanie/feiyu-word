@@ -35,6 +35,11 @@ let windowMode = 'panel';
 let dragBounds = null;
 let syncStore = null;
 let syncServer = null;
+// 数据单一写者：渲染进程与同步服务都通过 dataCache + 数据锁读写同一份内存对象，
+// 磁盘写入经同一队列串行执行，避免整文件互相覆盖。
+let dataCache = null;
+let dataLock = Promise.resolve();
+let quitting = false;
 
 const PET_W = 250;
 const PET_H = 210;
@@ -46,44 +51,86 @@ function getDataFile() {
   return dataFile;
 }
 
-function loadData() {
-  try {
-    const raw = fs.readFileSync(getDataFile(), 'utf8');
-    const data = JSON.parse(raw);
-    let books = [];
-    if (Array.isArray(data.books)) {
-      books = data.books;
-    } else if (Array.isArray(data.words)) {
-      // 兼容旧版本：把旧单词表迁移为默认词汇本
-      books = [
-        {
-          id: 'book-default',
-          name: '默认词汇本',
-          description: '由旧版本数据迁移',
-          builtin: false,
-          createdAt: Date.now(),
-          words: data.words
-        }
-      ];
-    }
-    return {
-      books,
-      stats: data.stats && typeof data.stats === 'object' ? data.stats : { days: {} },
-      settings: Object.assign({}, DEFAULT_DATA.settings, data.settings || {})
-    };
-  } catch (e) {
-    return JSON.parse(JSON.stringify(DEFAULT_DATA));
+function normalizeData(raw) {
+  const data = raw && typeof raw === 'object' ? raw : {};
+  let books = [];
+  if (Array.isArray(data.books)) {
+    books = data.books;
+  } else if (Array.isArray(data.words)) {
+    // 兼容旧版本：把旧单词表迁移为默认词汇本
+    books = [
+      {
+        id: 'book-default',
+        name: '默认词汇本',
+        description: '由旧版本数据迁移',
+        builtin: false,
+        createdAt: Date.now(),
+        words: data.words
+      }
+    ];
   }
+  return {
+    books,
+    stats: data.stats && typeof data.stats === 'object' ? data.stats : { days: {} },
+    settings: Object.assign({}, DEFAULT_DATA.settings, data.settings || {})
+  };
 }
 
-function saveData(data) {
+function loadDataFromDisk() {
+  const file = getDataFile();
+  // 主文件损坏时依次尝试 .bak，避免静默清空词库
+  const candidates = [file, file + '.bak'];
+  for (const p of candidates) {
+    try {
+      if (!fs.existsSync(p)) continue;
+      const data = JSON.parse(fs.readFileSync(p, 'utf8'));
+      if (p !== file) {
+        try { fs.copyFileSync(p, file); } catch (e) { /* 恢复失败则继续用内存数据 */ }
+      }
+      return normalizeData(data);
+    } catch (e) {
+      // 损坏文件隔离保存，下一次写入不会覆盖现场
+      if (p === file) {
+        try { fs.renameSync(file, file + '.corrupt-' + Date.now()); } catch (e2) { /* ignore */ }
+      }
+    }
+  }
+  return JSON.parse(JSON.stringify(DEFAULT_DATA));
+}
+
+// 全部读写都走这份内存缓存；渲染进程 load-data 拿到的是它的副本
+function getData() {
+  if (!dataCache) dataCache = loadDataFromDisk();
+  return dataCache;
+}
+
+function writeDataFile(data) {
   try {
     fs.mkdirSync(path.dirname(getDataFile()), { recursive: true });
-    fs.writeFileSync(getDataFile(), JSON.stringify(data, null, 2), 'utf8');
+    const tmp = getDataFile() + '.tmp';
+    fs.writeFileSync(tmp, JSON.stringify(data, null, 2), 'utf8');
+    // 原子替换：写临时文件后 rename；保留上一版做 .bak
+    try {
+      if (fs.existsSync(getDataFile())) fs.copyFileSync(getDataFile(), getDataFile() + '.bak');
+    } catch (e) { /* 备份失败不阻塞写入 */ }
+    fs.renameSync(tmp, getDataFile());
     return true;
   } catch (e) {
     return false;
   }
+}
+
+function saveData(data) {
+  dataCache = normalizeData(data);
+  return writeDataFile(dataCache);
+}
+
+// 串行化所有数据变更：渲染进程整份保存与同步服务的请求处理互斥，
+// 避免同步服务在等在线查词期间被渲染进程的旧快照覆盖。
+function withDataLock(fn) {
+  const run = dataLock.then(fn);
+  dataLock = run.then(() => undefined, () => undefined);
+  return run;
 }
 
 function initSync() {
@@ -91,8 +138,10 @@ function initSync() {
   syncStore = createSyncStore(path.join(app.getPath('userData'), 'word-pet-sync.json'));
   syncServer = createSyncServer({
     store: syncStore,
-    getData: () => loadData(),
-    saveData: (data) => saveData(data),
+    getData,
+    saveData,
+    withDataLock,
+    appVersion: app.getVersion(),
     lookupWord: (word) => performOnlineLookup(word),
     notifyDataChanged: () => {
       try {
@@ -343,11 +392,16 @@ function createTray() {
 }
 
 function registerShortcuts() {
-  globalShortcut.register('Alt+W', summon);
-  globalShortcut.register('Alt+E', () => {
-    if (win) win.webContents.send('shortcut-hide-panel');
-  });
-  globalShortcut.register('Alt+P', togglePet);
+  const results = [
+    globalShortcut.register('Alt+W', summon),
+    globalShortcut.register('Alt+E', () => {
+      if (win) win.webContents.send('shortcut-hide-panel');
+    }),
+    globalShortcut.register('Alt+P', togglePet)
+  ];
+  if (results.some((ok) => !ok)) {
+    console.warn('[word-pet] 部分全局快捷键注册失败（可能被其他程序占用）');
+  }
 }
 
 app.whenReady().then(() => {
@@ -361,9 +415,17 @@ app.whenReady().then(() => {
   });
 });
 
-app.on('will-quit', () => {
+app.on('before-quit', (event) => {
+  if (quitting) return;
+  quitting = true;
+  event.preventDefault();
   globalShortcut.unregisterAll();
-  if (syncServer) syncServer.stop().catch(() => {});
+  const finish = () => app.quit();
+  if (syncServer) {
+    syncServer.stop().catch(() => {}).then(finish);
+  } else {
+    finish();
+  }
 });
 
 app.on('window-all-closed', () => {
@@ -376,9 +438,9 @@ ipcMain.handle('get-clipboard', () => {
   try { return clipboard.readText() || ''; } catch (e) { return ''; }
 });
 
-ipcMain.handle('load-data', () => loadData());
+ipcMain.handle('load-data', () => getData());
 
-ipcMain.handle('save-data', (event, data) => saveData(data));
+ipcMain.handle('save-data', (event, data) => withDataLock(() => saveData(data)));
 
 ipcMain.handle('window-hide', () => {
   if (win) { win.hide(); return true; }
@@ -649,5 +711,21 @@ ipcMain.handle('sync-remove-device', async (event, deviceId) => {
 
 ipcMain.handle('sync-record-delete', async (event, payload) => {
   if (syncStore && payload) syncStore.addTombstone(payload.bookId, payload.word);
+  return true;
+});
+
+// 批量记录墓碑（删除词本 / 清空词本时用，一次保存）
+ipcMain.handle('sync-record-deletes', async (event, list) => {
+  if (syncStore && Array.isArray(list)) {
+    const byBook = new Map();
+    for (const item of list) {
+      if (item && item.bookId && item.word) {
+        const words = byBook.get(item.bookId) || [];
+        words.push(item.word);
+        byBook.set(item.bookId, words);
+      }
+    }
+    for (const [bookId, words] of byBook) syncStore.addTombstones(bookId, words);
+  }
   return true;
 });

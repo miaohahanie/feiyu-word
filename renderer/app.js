@@ -65,6 +65,7 @@
   let reviewQueue = [];
   let currentReview = null;
   let editingId = null;
+  let pendingSyncReload = false;
 
   function cloneDefaults() {
     return JSON.parse(JSON.stringify(DEFAULTS));
@@ -389,12 +390,16 @@
     const words = currentWords();
     const existing = words.find((w) => w.word.toLowerCase() === key);
     if (existing) {
+      // 只有内容真的变了才动 updatedAt，重复查同一词不应触发手机端无谓的增量同步
+      let changed = false;
       if (example) {
         const hasSame = existing.examples.some((e) => e.text === example.text);
-        if (!hasSame) existing.examples.push(example);
+        if (!hasSame) {
+          existing.examples.push(example);
+          changed = true;
+        }
       }
-      existing._existed = true;
-      existing.updatedAt = Date.now();
+      if (changed) existing.updatedAt = Date.now();
       return existing;
     }
     const word = {
@@ -406,8 +411,7 @@
       tags: [],
       createdAt: Date.now(),
       updatedAt: Date.now(),
-      mastered: false,
-      _existed: false
+      mastered: false
     };
     Object.assign(word, window.Scheduler.newWordBase(Date.now() + (data.settings.firstReviewDelayMin || 60) * 60 * 1000));
     words.unshift(word);
@@ -443,6 +447,8 @@
         '今天已完成 ' + window.Scheduler.computeTodayStats(data.stats).reviewed + ' 次复习。';
       setPet('complete', '今天的复习全部完成～');
       renderStats();
+      // 复习期间收到的同步变更，现在安全了再应用
+      if (pendingSyncReload) applySyncReload();
       return;
     }
     currentReview = reviewQueue.shift();
@@ -500,6 +506,8 @@
       rating >= 8 ? 'success' : rating >= 5 ? 'encourage' : 'calm',
       rating >= 8 ? '太厉害了！' : rating >= 5 ? '不错，继续加油～' : '没关系，我陪你多记几次'
     );
+    // 立即置空：380ms 切换窗口内连点按钮不会对同一词重复计分
+    currentReview = null;
     setTimeout(nextReview, 380);
   }
 
@@ -508,6 +516,7 @@
     currentReview.nextReview = Date.now() + 30 * 60 * 1000;
     currentReview.updatedAt = Date.now();
     scheduleSave();
+    currentReview = null;
     setTimeout(nextReview, 150);
   }
 
@@ -518,6 +527,7 @@
     currentReview.updatedAt = Date.now();
     scheduleSave();
     setPet('success', '这个词已经掌握啦～');
+    currentReview = null;
     setTimeout(nextReview, 150);
   }
 
@@ -611,6 +621,10 @@
     }
     if (!confirm('确定删除词汇本「' + book.name + '」？（含其中 ' + book.words.length + ' 个单词，不可恢复）')) return;
     data.books = data.books.filter((b) => b.id !== book.id);
+    // 同步墓碑：否则手机端这些词永远删不掉
+    if (window.petAPI && window.petAPI.recordWordDeletes && book.words.length) {
+      window.petAPI.recordWordDeletes(book.words.map((w) => ({ bookId: book.id, word: w.word })));
+    }
     if (data.settings.activeBookId === book.id || !data.books.some((b) => b.id === data.settings.activeBookId)) {
       data.settings.activeBookId = data.books[0].id;
     }
@@ -675,7 +689,19 @@
   function saveEdit() {
     const w = currentWords().find((x) => x.id === editingId);
     if (!w) return closeEdit();
-    w.word = $('#edit-word').value.trim().toLowerCase() || w.word;
+    const newWord = $('#edit-word').value.trim().toLowerCase() || w.word;
+    if (newWord !== w.word) {
+      const dup = currentWords().find((x) => x !== w && x.word.toLowerCase() === newWord);
+      if (dup) {
+        alert('词汇本中已有「' + newWord + '」，请换个拼写。');
+        return;
+      }
+      // 改名 = 删旧词 + 改新词：旧拼写需要墓碑，手机端才不会残留两条
+      if (window.petAPI && window.petAPI.recordWordDelete) {
+        window.petAPI.recordWordDelete({ bookId: currentBook().id, word: w.word });
+      }
+    }
+    w.word = newWord;
     w.meaning = $('#edit-meaning').value.trim() || w.meaning;
     const text = $('#edit-example').value.trim();
     const trans = $('#edit-example-trans').value.trim();
@@ -706,6 +732,12 @@
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
+  // 防 CSV 公式注入：Excel 会把 =/+/-/@ 开头的单元格当公式执行
+  function csvSafe(c) {
+    const s = String(c == null ? '' : c);
+    return /^[=+\-@\t\r]/.test(s) ? "'" + s : s;
+  }
+
   function exportData() {
     const book = currentBook();
     const rows = [['word', 'meaning', 'example', 'example_translation', 'mastered']];
@@ -716,7 +748,7 @@
     const csv =
       '\uFEFF' +
       rows
-        .map((r) => r.map((c) => '"' + String(c == null ? '' : c).replace(/"/g, '""') + '"').join(','))
+        .map((r) => r.map((c) => '"' + csvSafe(c).replace(/"/g, '""') + '"').join(','))
         .join('\n');
     download(book.name + '.csv', csv, 'text/csv;charset=utf-8');
   }
@@ -1104,7 +1136,13 @@
 
     $('#btn-reset').addEventListener('click', () => {
       if (confirm('清空当前词汇本「' + currentBook().name + '」的全部单词？（不可恢复）')) {
-        currentBook().words = [];
+        const book = currentBook();
+        const removed = book.words;
+        book.words = [];
+        // 同步墓碑：否则手机端这些词永远删不掉
+        if (window.petAPI && window.petAPI.recordWordDeletes && removed.length) {
+          window.petAPI.recordWordDeletes(removed.map((w) => ({ bookId: book.id, word: w.word })));
+        }
         scheduleSave();
         renderWords();
         renderStats();
@@ -1268,6 +1306,13 @@
     refreshReview();
   }
 
+  async function applySyncReload() {
+    pendingSyncReload = false;
+    data = await loadData();
+    renderAll();
+    refreshSyncStatus();
+  }
+
   async function init() {
     data = await loadData();
     if (!data || typeof data !== 'object') data = cloneDefaults();
@@ -1279,10 +1324,13 @@
     renderAll();
     refreshSyncStatus();
     if (window.petAPI && window.petAPI.onSyncDataUpdated) {
-      window.petAPI.onSyncDataUpdated(async () => {
-        data = await loadData();
-        renderAll();
-        refreshSyncStatus();
+      window.petAPI.onSyncDataUpdated(() => {
+        // 复习进行中先不换 data（currentReview 引用旧对象会丢分），等本题结束再重载
+        if (currentReview) {
+          pendingSyncReload = true;
+          return;
+        }
+        applySyncReload();
       });
     }
     setWindowMode('pet');

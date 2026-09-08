@@ -42,13 +42,34 @@ class WordRepository {
 
   Future<void> removeWords(String bookId, List<String> words) async {
     final db = await _db();
+    final batch = db.batch();
     for (final word in words) {
-      await db.delete(
+      batch.delete(
         'words',
         where: 'bookId = ? AND word = ?',
         whereArgs: [bookId, word],
       );
     }
+    await batch.commit(noResult: true);
+  }
+
+  /// 词本列表对齐桌面端：删除服务端已不存在的词本及其全部单词。
+  Future<void> removeBooksNotIn(List<String> keepIds) async {
+    final db = await _db();
+    final rows = await db.query('books', columns: ['id']);
+    final keep = keepIds.toSet();
+    final removed = rows
+        .map((r) => r['id'] as String)
+        .where((id) => !keep.contains(id))
+        .toList();
+    if (removed.isEmpty) return;
+    final batch = db.batch();
+    for (final id in removed) {
+      batch.delete('books', where: 'id = ?', whereArgs: [id]);
+      batch.delete('words', where: 'bookId = ?', whereArgs: [id]);
+      batch.delete('review_events', where: 'bookId = ?', whereArgs: [id]);
+    }
+    await batch.commit(noResult: true);
   }
 
   Future<List<Word>> getWords(String? bookId, {String? keyword}) async {
@@ -199,5 +220,14 @@ class WordRepository {
       map[(r['rating'] as int?) ?? 0] = (r['c'] as int?) ?? 0;
     }
     return map;
+  }
+
+  Future<void> deleteWord(String bookId, String word) async {
+    final db = await _db();
+    await db.delete(
+      'words',
+      where: 'bookId = ? AND word = ?',
+      whereArgs: [bookId, word],
+    );
   }
 }

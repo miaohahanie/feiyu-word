@@ -46,17 +46,25 @@ class SyncService {
     if (client == null) {
       return const SyncResult(ok: false, message: '尚未配对');
     }
-
     try {
+      // 0) 刷新词本列表：桌面端新增/删除词本也能到达手机。
+      //    失败不阻塞词库同步（老版本服务端可能没有该接口）。
+      try {
+        final serverBooks = await client.fetchBooks();
+        await repository.upsertBooks(serverBooks);
+        await repository.removeBooksNotIn(serverBooks.map((b) => b.id).toList());
+      } catch (_) {}
+
       final cursorKey = 'cursor.$bookId';
       final since = await repository.getSyncCursor(cursorKey) ?? 0;
 
-      // 1) 拉取增量词库
+      // 1) 拉取增量词库。先应用墓碑再 upsert：
+      //    “删除后重加”的词在墓碑与词并存时不会被旧墓碑误删。
       final pull = await client.pull(bookId, since);
-      await repository.upsertWords(pull.words);
       if (pull.tombstones.isNotEmpty) {
         await repository.removeWords(bookId, pull.tombstones);
       }
+      await repository.upsertWords(pull.words);
 
       // 2) 上传未同步的复习事件；服务端用同一套 SM-2 重算并回传权威状态
       final pending = await repository.getPendingEvents();
@@ -85,6 +93,8 @@ class SyncService {
       );
     } catch (e) {
       return SyncResult(ok: false, message: '同步失败：$e');
+    } finally {
+      client.close();
     }
   }
 
@@ -110,20 +120,36 @@ class SyncService {
   Future<LookupResult> lookupWord(String word) async {
     final client = await pairing.buildClient();
     if (client == null) throw Exception('尚未配对');
-    return client.lookup(word);
+    try {
+      return await client.lookup(word);
+    } finally {
+      client.close();
+    }
   }
 
   /// 添加单词到当前词本：电脑端入库 + 手机本地入库。
   Future<Word> addWord(String word, {String? meaning, String? phonetic}) async {
     final client = await pairing.buildClient();
     if (client == null) throw Exception('尚未配对');
-    final serverWord = await client.addWord(
-      bookId: bookId,
-      word: word,
-      meaning: meaning,
-      phonetic: phonetic,
-    );
-    await repository.upsertWords([serverWord]);
-    return serverWord;
+    try {
+      final serverWord =
+          await client.addWord(bookId: bookId, word: word, meaning: meaning, phonetic: phonetic);
+      await repository.upsertWords([serverWord]);
+      return serverWord;
+    } finally {
+      client.close();
+    }
+  }
+
+  /// 从当前词本删除单词：电脑端删除 + 手机本地删除。
+  Future<void> deleteWord(String word) async {
+    final client = await pairing.buildClient();
+    if (client == null) throw Exception('尚未配对');
+    try {
+      await client.deleteWord(bookId: bookId, word: word);
+      await repository.deleteWord(bookId, word);
+    } finally {
+      client.close();
+    }
   }
 }

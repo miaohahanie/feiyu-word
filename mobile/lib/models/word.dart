@@ -98,12 +98,27 @@ class Word {
           .map((e) => Example.fromJson(Map<String, dynamic>.from(e as Map)))
           .toList();
     }
+    // 服务端下发最近 history（{id,date,rating}），保证“最近 3 次高分”判定与幂等去重可用
+    final rawHistory = json['history'];
+    List<HistoryItem> history = [];
+    if (rawHistory is List) {
+      for (final h in rawHistory) {
+        final m = Map<String, dynamic>.from(h as Map);
+        final date = (m['date'] ?? '').toString();
+        history.add(HistoryItem(
+          id: (m['id'] ?? '').toString(),
+          createdAt: DateTime.tryParse(date)?.millisecondsSinceEpoch ?? 0,
+          rating: ((m['rating'] ?? 0) as num).toInt(),
+        ));
+      }
+    }
     return Word(
       bookId: bookId,
       word: (json['word'] ?? '').toString(),
       meaning: (json['meaning'] ?? '').toString(),
       phonetic: (json['phonetic'] ?? '').toString(),
       examples: examples,
+      history: history,
       reps: (json['reps'] ?? 0) as int,
       ease: ((json['ease'] ?? 2.5) as num).toDouble(),
       interval: (json['interval'] ?? 0) as int,

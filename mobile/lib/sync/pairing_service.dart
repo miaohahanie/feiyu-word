@@ -70,6 +70,19 @@ class PairingService {
   }
 
   Future<void> unpair() async {
+    // 先吊销桌面端的设备凭证（尽力而为，电脑离线时也要能清掉本地配对）
+    try {
+      final client = await buildClient();
+      if (client != null) {
+        try {
+          await client.deleteDevice();
+        } finally {
+          client.close();
+        }
+      }
+    } catch (_) {
+      /* 吊销失败不阻塞解除配对 */
+    }
     await settings.remove('sync.host');
     await settings.remove('sync.port');
     await settings.remove('sync.deviceId');

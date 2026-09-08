@@ -100,6 +100,7 @@ class SyncClient {
     required String host,
     required int port,
     required String code,
+    String name = 'Android 手机',
     http.Client? client,
   }) async {
     final c = client ?? http.Client();
@@ -107,7 +108,7 @@ class SyncClient {
       final res = await c.post(
         Uri.parse('http://$host:$port/api/pair'),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'code': code}),
+        body: jsonEncode({'code': code, 'name': name}),
       );
       if (res.statusCode != 200) {
         throw Exception('配对失败：${res.statusCode} ${res.body}');
@@ -233,5 +234,31 @@ class SyncClient {
     }
     final data = jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
     return Word.fromServerJson(bookId, Map<String, dynamic>.from(data['word'] as Map));
+  }
+
+  Future<void> deleteWord({required String bookId, required String word}) async {
+    final uri = Uri.parse(
+      '$baseUrl/api/word?book=${Uri.encodeComponent(bookId)}&word=${Uri.encodeComponent(word)}',
+    );
+    final res = await _client.delete(uri, headers: headers);
+    if (res.statusCode != 200 && res.statusCode != 204) {
+      throw Exception('删除单词失败：${res.statusCode} ${res.body}');
+    }
+  }
+
+  /// 吊销本设备（解除配对时调用，让桌面端立即失效本机 token）。
+  Future<void> deleteDevice() async {
+    final res = await _client.delete(
+      Uri.parse('$baseUrl/api/device/$deviceId'),
+      headers: headers,
+    );
+    if (res.statusCode != 200) {
+      throw Exception('吊销设备失败：${res.statusCode} ${res.body}');
+    }
+  }
+
+  /// 释放底层 HTTP 连接。一次性构建的客户端用完必须 close，否则 keep-alive 连接会一直累积。
+  void close() {
+    _client.close();
   }
 }

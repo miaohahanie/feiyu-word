@@ -6,6 +6,7 @@ import 'pages/license_page.dart';
 import 'pages/qr_scanner_page.dart';
 import 'pages/review_page.dart';
 import 'pages/settings_page.dart';
+import 'pages/words_page.dart';
 
 class WordPetApp extends StatelessWidget {
   const WordPetApp({super.key});
@@ -26,6 +27,7 @@ class WordPetApp extends StatelessWidget {
         '/settings': (_) => const SettingsPage(),
         '/review': (_) => const ReviewPage(),
         '/add': (_) => const AddWordPage(),
+        '/words': (_) => const WordsPage(),
         '/license': (_) => const AboutLicensePage(),
         '/qr': (_) => const QrScannerPage(),
       },

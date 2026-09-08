@@ -21,6 +21,7 @@ contextBridge.exposeInMainWorld('petAPI', {
   allowSyncFirewall: () => ipcRenderer.invoke('sync-allow-firewall'),
   removeSyncDevice: (deviceId) => ipcRenderer.invoke('sync-remove-device', deviceId),
   recordWordDelete: (payload) => ipcRenderer.invoke('sync-record-delete', payload),
+  recordWordDeletes: (list) => ipcRenderer.invoke('sync-record-deletes', list),
   onSyncDataUpdated: (callback) => ipcRenderer.on('sync-data-updated', callback),
   onShortcut: (callback) => ipcRenderer.on('shortcut-summon', callback),
   onShortcutHide: (callback) => ipcRenderer.on('shortcut-hide-panel', callback),
