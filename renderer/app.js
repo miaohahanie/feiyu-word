@@ -635,6 +635,17 @@
 
   /* ---------------- 单词本 ---------------- */
 
+  // 易错词判定（与手机端 weak_words.dart 一致）：lapses>=2 或最近两次自评<=4
+  function isWeakWord(w) {
+    if ((Number(w.lapses) || 0) >= 2) return true;
+    const h = Array.isArray(w.history) ? w.history : [];
+    if (h.length >= 2) {
+      const last2 = h.slice(-2);
+      if (last2.every((x) => (Number(x && x.rating) || 0) <= 4)) return true;
+    }
+    return false;
+  }
+
   function renderWords() {
     renderBookSelect();
     const q = ($('#words-search').value || '').trim().toLowerCase();
@@ -658,6 +669,7 @@
           '<span class="w">' + escapeHtml(w.word) + '</span>' +
           (w.mastered ? '<span class="tag mastered">已掌握</span>' : '') +
           (due && !w.mastered ? '<span class="tag due">待复习</span>' : '') +
+          (isWeakWord(w) ? '<span class="tag due">易错</span>' : '') +
           '<button class="mini-action" data-action="edit" data-id="' + w.id + '">编辑</button>' +
           '<button class="mini-action" data-action="delete" data-id="' + w.id + '">删除</button>' +
           '</div>' +

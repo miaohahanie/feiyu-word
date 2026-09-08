@@ -25,6 +25,8 @@ dependencies:
   timezone: ^0.9.4
   # 后台定时任务：动态计算“本轮 N 个词到期”
   workmanager: ^0.5.2
+  # 复习时保持屏幕常亮（可选开关）
+  wakelock_plus: ^1.2.8
 
 dev_dependencies:
   flutter_test:

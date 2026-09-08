@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../app_state.dart';
 import '../data/settings_repository.dart';
@@ -11,7 +12,10 @@ import '../sync/sync_service.dart';
 enum _Phase { loading, firstPass, rolling, done }
 
 class ReviewPage extends StatefulWidget {
-  const ReviewPage({super.key});
+  const ReviewPage({super.key, this.rollingWords});
+
+  /// 非空时跳过首轮复习，直接对这批词做滚动练习（首页“滚动练习”入口 / 易错词一键滚动）。
+  final List<Word>? rollingWords;
 
   @override
   State<ReviewPage> createState() => _ReviewPageState();
@@ -32,6 +36,9 @@ class _ReviewPageState extends State<ReviewPage> {
   RollingSession? _rolling;
   bool _rollStoppedEarly = false;
 
+  // 独立滚动模式的“无词可练”状态
+  bool _standaloneEmpty = false;
+
   // 评分请求处理中：防止 async 期间连点按钮对同一词重复计分
   bool _submitting = false;
 
@@ -42,11 +49,47 @@ class _ReviewPageState extends State<ReviewPage> {
   void initState() {
     super.initState();
     _load();
+    _applyKeepScreenOn();
+  }
+
+  Future<void> _applyKeepScreenOn() async {
+    try {
+      final settings = context.read<SettingsRepository>();
+      final keepOn = await settings.getBool('review.keepScreenOn') ?? false;
+      if (keepOn) await WakelockPlus.enable();
+    } catch (_) {
+      /* 常亮失败不影响复习 */
+    }
+  }
+
+  @override
+  void dispose() {
+    // 无论开关状态如何都尝试恢复（enable 只在开关打开时被调用过）
+    WakelockPlus.disable().catchError((_) {});
+    super.dispose();
   }
 
   Future<void> _load() async {
     final state = context.read<AppState>();
     final repo = context.read<WordRepository>();
+    await _refreshToday();
+
+    // 独立滚动模式：直接对传入的词滚动练习，不计遗忘曲线
+    final preset = widget.rollingWords;
+    if (preset != null) {
+      if (!mounted) return;
+      setState(() {
+        if (preset.isEmpty) {
+          _phase = _Phase.done;
+          _standaloneEmpty = true;
+        } else {
+          _phase = _Phase.rolling;
+          _rolling = RollingSession(List.of(preset));
+        }
+      });
+      return;
+    }
+
     final bookId = state.selectedBookId;
     if (bookId == null) {
       setState(() => _phase = _Phase.done);
@@ -55,7 +98,6 @@ class _ReviewPageState extends State<ReviewPage> {
     final now = DateTime.now().millisecondsSinceEpoch;
     final due = await repo.getDueWords(bookId, now);
     final queue = due.take(20).toList();
-    await _refreshToday();
     if (mounted) {
       setState(() {
         _phase = _Phase.firstPass;
@@ -118,28 +160,24 @@ class _ReviewPageState extends State<ReviewPage> {
     if (word == null || state.selectedBookId == null) return;
     final deviceId = await settings.getString('sync.deviceId') ?? '';
 
-    setState(() => _submitting = true);
-    try {
-      final service = SyncService(
-        pairing: state.pairing,
-        repository: repo,
-        settings: settings,
-        deviceId: deviceId,
-        bookId: state.selectedBookId!,
-      );
-      await service.review(word, rating);
-      if (rating <= 4) _forgotten.add(word);
-      _advanceFirstPass();
-    } catch (e) {
+    final service = SyncService(
+      pairing: state.pairing,
+      repository: repo,
+      settings: settings,
+      deviceId: deviceId,
+      bookId: state.selectedBookId!,
+    );
+    // 评分只做内存运算，立即切卡；落库在后台完成（本地 SQLite，耗时毫秒级）
+    final event = service.applyReviewLocally(word, rating);
+    if (rating <= 4) _forgotten.add(word);
+    _advanceFirstPass();
+    service.persistReview(word, event).catchError((Object e) {
       if (mounted) {
-        _revealed = true;
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('保存失败，请重试：$e')),
+          SnackBar(content: Text('保存失败（不影响本次复习）：$e')),
         );
       }
-    } finally {
-      if (mounted) setState(() => _submitting = false);
-    }
+    });
   }
 
   Future<void> _skip() async {
@@ -201,6 +239,34 @@ class _ReviewPageState extends State<ReviewPage> {
 
   Widget _buildSummary() {
     final rolling = _rolling;
+    if (_standaloneEmpty) {
+      return Center(
+        child: ListView(
+          shrinkWrap: true,
+          padding: const EdgeInsets.all(24),
+          children: [
+            const Icon(Icons.sentiment_satisfied_alt, size: 64, color: Colors.teal),
+            const SizedBox(height: 12),
+            const Text(
+              '今天没有需要巩固的词～',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              '复习完如有模糊/不认识的词，会出现在这里',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 13, color: Colors.grey),
+            ),
+            const SizedBox(height: 24),
+            FilledButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('返回首页'),
+            ),
+          ],
+        ),
+      );
+    }
     return Center(
       child: ListView(
         shrinkWrap: true,
@@ -213,7 +279,11 @@ class _ReviewPageState extends State<ReviewPage> {
           ),
           const SizedBox(height: 12),
           Text(
-            rolling == null ? '今天的复习全部完成～' : '滚动练习完成，全部记住啦！',
+            rolling == null
+                ? '今天的复习全部完成～'
+                : _rollStoppedEarly
+                    ? '滚动练习已结束'
+                    : '滚动练习完成，全部记住啦！',
             textAlign: TextAlign.center,
             style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
           ),
@@ -221,7 +291,7 @@ class _ReviewPageState extends State<ReviewPage> {
           if (rolling != null) ...[
             Text(
               _rollStoppedEarly
-                  ? '滚动练习已手动结束，还有 ${rolling.remaining} 个词未通过'
+                  ? '已手动结束，还有 ${rolling.remaining} 个词未通过'
                   : '${rolling.totalWords} 个模糊词经过 ${rolling.round} 轮全部认识',
               textAlign: TextAlign.center,
               style: const TextStyle(fontSize: 16),
@@ -284,8 +354,13 @@ class _ReviewPageState extends State<ReviewPage> {
             const SizedBox(height: 8),
           ],
           Expanded(
-            child: Card(
-              child: Padding(
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 180),
+              switchInCurve: Curves.easeOut,
+              transitionBuilder: (child, anim) => FadeTransition(opacity: anim, child: child),
+              child: Card(
+                key: ValueKey('${rolling ? 'r' : 'f'}-${word.word}-$_finished'),
+                child: Padding(
                 padding: const EdgeInsets.all(20),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -314,6 +389,7 @@ class _ReviewPageState extends State<ReviewPage> {
                         child: const Text('显示答案'),
                       ),
                   ],
+                  ),
                 ),
               ),
             ),

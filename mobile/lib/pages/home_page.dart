@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../app_state.dart';
 import '../data/word_repository.dart';
+import 'review_page.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -14,6 +15,7 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   int _dueCount = 0;
   int _reviewedToday = 0;
+  int _weakToday = 0;
 
   @override
   void initState() {
@@ -26,10 +28,13 @@ class _HomePageState extends State<HomePage> {
     final repo = context.read<WordRepository>();
     final count = await state.dueCount();
     final reviewed = await repo.countTodayEvents();
+    final bookId = state.selectedBookId;
+    final weak = bookId == null ? 0 : (await repo.weakWordsReviewedToday(bookId)).length;
     if (mounted) {
       setState(() {
         _dueCount = count;
         _reviewedToday = reviewed;
+        _weakToday = weak;
       });
     }
   }
@@ -128,6 +133,19 @@ class _HomePageState extends State<HomePage> {
           ),
           Card(
             child: ListTile(
+              leading: const Icon(Icons.autorenew),
+              title: const Text('滚动练习'),
+              subtitle: Text(
+                _weakToday > 0
+                    ? '今日 $_weakToday 个模糊词待巩固（不计入遗忘曲线）'
+                    : '今日暂无待巩固的模糊词',
+              ),
+              enabled: _weakToday > 0,
+              onTap: _weakToday > 0 ? _startStandaloneRolling : null,
+            ),
+          ),
+          Card(
+            child: ListTile(
               leading: const Icon(Icons.settings),
               title: const Text('设置'),
               onTap: () async {
@@ -139,6 +157,21 @@ class _HomePageState extends State<HomePage> {
         ],
       ),
     );
+  }
+
+  Future<void> _startStandaloneRolling() async {
+    final state = context.read<AppState>();
+    final repo = context.read<WordRepository>();
+    final bookId = state.selectedBookId;
+    if (bookId == null) return;
+    final keys = await repo.weakWordsReviewedToday(bookId);
+    final words = await repo.getWordsByKey(bookId, keys);
+    if (!mounted) return;
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => ReviewPage(rollingWords: words)),
+    );
+    _loadDue();
   }
 
   String _selectedBookName(AppState state) {

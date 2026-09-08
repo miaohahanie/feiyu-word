@@ -97,6 +97,42 @@ class WordRepository {
     return rows.map((r) => Word.fromMap(r)).toList();
   }
 
+  /// 按词面批量取词（保持传入顺序）。
+  Future<List<Word>> getWordsByKey(String bookId, List<String> words) async {
+    if (words.isEmpty) return [];
+    final db = await _db();
+    final placeholders = List.filled(words.length, '?').join(',');
+    final rows = await db.query(
+      'words',
+      where: 'bookId = ? AND deleted = 0 AND word IN ($placeholders)',
+      whereArgs: [bookId, ...words.map((w) => w.toLowerCase())],
+    );
+    final byKey = {for (final r in rows.map((r) => Word.fromMap(r))) r.word: r};
+    return words.map((w) => byKey[w.toLowerCase()]).whereType<Word>().toList();
+  }
+
+  /// 今天复习过的词里，最近一次评分 ≤ 4（模糊/不认识）的词面，按复习先后排序。
+  Future<List<String>> weakWordsReviewedToday(String bookId) async {
+    final db = await _db();
+    final now = DateTime.now();
+    final start = DateTime(now.year, now.month, now.day).millisecondsSinceEpoch;
+    final rows = await db.query(
+      'review_events',
+      columns: ['word', 'rating'],
+      where: 'bookId = ? AND createdAt >= ?',
+      whereArgs: [bookId, start],
+      orderBy: 'createdAt ASC',
+    );
+    final lastRating = <String, int>{};
+    for (final r in rows) {
+      lastRating[r['word'] as String] = (r['rating'] as int?) ?? 0;
+    }
+    return lastRating.entries
+        .where((e) => e.value <= 4)
+        .map((e) => e.key)
+        .toList();
+  }
+
   Future<List<Word>> getDueWords(String bookId, int now) async {
     final db = await _db();
     final rows = await db.query(

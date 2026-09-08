@@ -5,7 +5,9 @@ import '../app_state.dart';
 import '../data/settings_repository.dart';
 import '../data/word_repository.dart';
 import '../models/word.dart';
+import '../review/weak_words.dart';
 import '../sync/sync_service.dart';
+import 'review_page.dart';
 
 class WordsPage extends StatefulWidget {
   const WordsPage({super.key});
@@ -18,6 +20,7 @@ class _WordsPageState extends State<WordsPage> {
   List<Word> _words = [];
   bool _loading = true;
   String _keyword = '';
+  bool _weakOnly = false;
 
   @override
   void initState() {
@@ -132,6 +135,21 @@ class _WordsPageState extends State<WordsPage> {
     }
   }
 
+  /// 当前筛选 + 搜索下可见的词（供一键滚动复用）。
+  List<Word> get _visibleWords {
+    return _words.where((w) => !_weakOnly || isWeakWord(w)).toList();
+  }
+
+  Future<void> _rollWeakWords() async {
+    final weak = _visibleWords;
+    if (weak.isEmpty) return;
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => ReviewPage(rollingWords: List.of(weak))),
+    );
+    if (mounted) _load();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -151,19 +169,52 @@ class _WordsPageState extends State<WordsPage> {
               ),
             ),
           ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 4),
+            child: Row(
+              children: [
+                FilterChip(
+                  label: const Text('只看易错词'),
+                  selected: _weakOnly,
+                  onSelected: (v) => setState(() => _weakOnly = v),
+                ),
+                const Spacer(),
+                if (_weakOnly && _visibleWords.isNotEmpty)
+                  TextButton.icon(
+                    onPressed: _rollWeakWords,
+                    icon: const Icon(Icons.autorenew, size: 18),
+                    label: Text('滚动练习（${_visibleWords.length}）'),
+                  ),
+              ],
+            ),
+          ),
           Expanded(
             child: _loading
                 ? const Center(child: CircularProgressIndicator())
-                : _words.isEmpty
-                    ? const Center(child: Text('没有单词'))
+                : _visibleWords.isEmpty
+                    ? Center(
+                        child: Text(_weakOnly ? '没有易错词，太棒了！' : '没有单词'),
+                      )
                     : ListView.builder(
-                        itemCount: _words.length,
+                        itemCount: _visibleWords.length,
                         itemBuilder: (ctx, i) {
-                          final w = _words[i];
+                          final w = _visibleWords[i];
                           final due = w.isDue(DateTime.now().millisecondsSinceEpoch);
+                          final weak = isWeakWord(w);
                           return Card(
                             child: ListTile(
-                              title: Text(w.word, style: const TextStyle(fontWeight: FontWeight.bold)),
+                              title: Row(
+                                children: [
+                                  Flexible(
+                                    child: Text(w.word,
+                                        style: const TextStyle(fontWeight: FontWeight.bold)),
+                                  ),
+                                  if (weak) ...[
+                                    const SizedBox(width: 6),
+                                    const Icon(Icons.error_outline, color: Colors.redAccent, size: 16),
+                                  ],
+                                ],
+                              ),
                               subtitle: Text(
                                 (w.phonetic.isNotEmpty ? '${w.phonetic}\n' : '') + w.meaning,
                                 maxLines: 3,

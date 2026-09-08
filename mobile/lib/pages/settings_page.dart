@@ -21,6 +21,7 @@ class _SettingsPageState extends State<SettingsPage> {
 
   String _message = '';
   bool _remindersEnabled = true;
+  bool _keepScreenOn = false;
 
   @override
   void initState() {
@@ -28,7 +29,13 @@ class _SettingsPageState extends State<SettingsPage> {
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final settings = context.read<SettingsRepository>();
       final enabled = await settings.getBool('reminders.enabled') ?? true;
-      if (mounted) setState(() => _remindersEnabled = enabled);
+      final keepOn = await settings.getBool('review.keepScreenOn') ?? false;
+      if (mounted) {
+        setState(() {
+          _remindersEnabled = enabled;
+          _keepScreenOn = keepOn;
+        });
+      }
     });
   }
 
@@ -179,6 +186,15 @@ class _SettingsPageState extends State<SettingsPage> {
                   onChanged: _toggleReminders,
                   title: const Text('开启复习提醒'),
                   subtitle: const Text('每天 08:00–22:00 每 2 小时提醒：8 / 10 / 12 / 14 / 16 / 18 / 20 / 22 点'),
+                ),
+                SwitchListTile(
+                  value: _keepScreenOn,
+                  onChanged: (v) async {
+                    await context.read<SettingsRepository>().setBool('review.keepScreenOn', v);
+                    if (mounted) setState(() => _keepScreenOn = v);
+                  },
+                  title: const Text('复习时保持屏幕常亮'),
+                  subtitle: const Text('进入复习/滚动练习页期间屏幕不会自动熄灭'),
                 ),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),

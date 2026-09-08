@@ -100,6 +100,13 @@ class SyncService {
 
   /// 本地评分：用与电脑端一致的 SM-2 算法更新词条状态，并写入待上传事件。
   Future<ReviewEvent> review(Word word, int rating) async {
+    final event = applyReviewLocally(word, rating);
+    await persistReview(word, event);
+    return event;
+  }
+
+  /// 同步部分：只改内存中的词条状态并生成事件，UI 可立即切卡。
+  ReviewEvent applyReviewLocally(Word word, int rating) {
     final now = DateTime.now().millisecondsSinceEpoch;
     final event = ReviewEvent(
       eventId: _uuid.v4(),
@@ -109,11 +116,14 @@ class SyncService {
       rating: rating,
       createdAt: now,
     );
-
     applyRating(word, rating, now, event.eventId);
+    return event;
+  }
+
+  /// 异步部分：落库（词条状态 + 待上传事件）。
+  Future<void> persistReview(Word word, ReviewEvent event) async {
     await repository.updateWord(word);
     await repository.saveReviewEvent(event);
-    return event;
   }
 
   /// 在线查词（走电脑端同步服务的 /api/lookup）
