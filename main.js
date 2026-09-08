@@ -26,6 +26,36 @@ const DEFAULT_DATA = {
   }
 };
 
+// 冒烟测试用独立临时 userData，避免污染真实词库（此前真实数据里积累了大量“测试本”）
+if (process.argv.includes('--smoke-test')) {
+  const os = require('os');
+  const smokeRoot = os.tmpdir();
+  const smokeDir = path.join(smokeRoot, 'word-pet-smoke-' + Date.now());
+  app.setPath('userData', smokeDir);
+
+  // 清扫残留的 smoke 目录（mtime 超过 10 分钟才算残留，避免误删并发运行的实例）。
+  // Windows 下退出瞬间 GPU 缓存句柄可能未释放导致自删失败，靠下次启动补扫。
+  function cleanupStaleSmokeDirs() {
+    try {
+      for (const name of fs.readdirSync(smokeRoot)) {
+        if (!/^word-pet-smoke-/.test(name)) continue;
+        const dir = path.join(smokeRoot, name);
+        let stale = true;
+        try { stale = Date.now() - fs.statSync(dir).mtimeMs > 10 * 60 * 1000; } catch (e) { /* 已消失 */ }
+        if (!stale) continue;
+        try { fs.rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 150 }); } catch (e) { /* 下次再扫 */ }
+      }
+    } catch (e) { /* ignore */ }
+  }
+
+  cleanupStaleSmokeDirs();
+  // app.exit() 不会触发 app 的 quit 事件，用 process 退出钩子兜底
+  process.on('exit', () => {
+    try { fs.rmSync(smokeDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 150 }); } catch (e) { /* 留给下次启动补扫 */ }
+    cleanupStaleSmokeDirs();
+  });
+}
+
 let win = null;
 let tray = null;
 let dataFile = null;
